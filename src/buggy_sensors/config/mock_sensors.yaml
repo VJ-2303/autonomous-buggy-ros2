@@ -1,0 +1,20 @@
+mock_gps_node:
+  ros__parameters:
+    publish_rate_hz: 5.0
+    frame_id: "gps"
+    motion_mode: "circle"
+    latitude_deg: 13.0827
+    longitude_deg: 80.2707
+    altitude_m: 10.0
+    radius_m: 25.0
+    speed_mps: 1.5
+
+mock_bms_node:
+  ros__parameters:
+    publish_rate_hz: 1.0
+    frame_id: "bms_frame"
+    nominal_voltage: 48.0
+    initial_percentage: 0.95
+    discharge_rate_per_min: 0.005
+    current_draw_a: -5.2
+    temperature_c: 28.5

@@ -1,0 +1,6 @@
+global_planner_node:
+  ros__parameters:
+    min_battery_threshold: 0.15
+    campus_origin_lat: 13.0827
+    campus_origin_lon: 80.2707
+    map_file_path: ""
