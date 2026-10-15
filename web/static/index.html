@@ -761,6 +761,7 @@
     let currentPos = { lat: 11.075066, lon: 76.989387, yaw: 0 };
     let targetPos = { lat: 11.075066, lon: 76.989387, yaw: 0 };
     let passengerCount = 0;
+    let firstTelemetryReceived = false;
 
     // 1. Initialize High-Resolution Satellite Map
     function initMap() {
@@ -864,6 +865,12 @@
 
         // Render Real OSM Roads with High Visibility on Satellite
         L.geoJSON(campusGeoJson, {
+          filter: function(f) {
+            if (f.geometry.type === 'Point') {
+              return !!f.properties.is_landmark;
+            }
+            return true;
+          },
           style: function(f) {
             if (f.properties.type === 'road') {
               return {
@@ -996,16 +1003,24 @@
 
       // Target Coordinates for Smooth LERP Animation
       if (car.lat && car.lon) {
-        // Calculate heading delta from previous target
-        const dLat = car.lat - targetPos.lat;
-        const dLon = car.lon - targetPos.lon;
-        if (Math.hypot(dLat, dLon) > 0.000005) {
-          // Compute heading angle in degrees (North = 0, East = 90)
-          const angleRad = Math.atan2(dLon, dLat);
-          targetPos.yaw = (angleRad * 180 / Math.PI + 360) % 360;
+        if (!firstTelemetryReceived) {
+          currentPos.lat = car.lat;
+          currentPos.lon = car.lon;
+          if (typeof car.yaw === 'number') currentPos.yaw = car.yaw;
+          firstTelemetryReceived = true;
         }
         targetPos.lat = car.lat;
         targetPos.lon = car.lon;
+        if (typeof car.yaw === 'number') {
+          targetPos.yaw = car.yaw;
+        } else {
+          const dLat = car.lat - targetPos.lat;
+          const dLon = car.lon - targetPos.lon;
+          if (Math.hypot(dLat, dLon) > 0.000005) {
+            const angleRad = Math.atan2(dLon, dLat);
+            targetPos.yaw = (angleRad * 180 / Math.PI + 360) % 360;
+          }
+        }
       }
 
       // Header & Peek Info
@@ -1037,12 +1052,19 @@
       });
 
       // Update Planned Route Polyline
-      if (t.decision && t.decision.path_nodes && campusGeoJson) {
+      if (t.decision && t.decision.path_coords && t.decision.path_coords.length) {
+        routePolyline.setLatLngs(t.decision.path_coords);
+      } else if (t.decision && t.decision.path_nodes && campusGeoJson) {
         const polyCoords = [];
+        const nodesDict = campusGeoJson.nodes_dict || {};
         t.decision.path_nodes.forEach(nid => {
-          const node = campusGeoJson.features.find(f => f.properties.id === nid && f.geometry.type === 'Point');
-          if (node) {
-            polyCoords.push([node.geometry.coordinates[1], node.geometry.coordinates[0]]);
+          if (nodesDict[nid]) {
+            polyCoords.push(nodesDict[nid]);
+          } else {
+            const node = campusGeoJson.features.find(f => f.properties.id === nid && f.geometry.type === 'Point');
+            if (node) {
+              polyCoords.push([node.geometry.coordinates[1], node.geometry.coordinates[0]]);
+            }
           }
         });
         routePolyline.setLatLngs(polyCoords);
@@ -1137,6 +1159,8 @@
 
     document.getElementById('btn-reset').onclick = async () => {
       await fetch('/api/reset', { method: 'POST' });
+      firstTelemetryReceived = false;
+      routePolyline.setLatLngs([]);
     };
 
     // Initialize

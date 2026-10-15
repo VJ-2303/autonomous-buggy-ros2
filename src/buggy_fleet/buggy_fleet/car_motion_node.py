@@ -3,6 +3,7 @@ ROS 2 Car Motion Node: Kinematic simulation and Nav2 waypoint execution for KCT 
 Publishes live Odometry, TF transforms, NavSatFix GPS, and BMS BatteryState telemetry.
 """
 
+import json
 import math
 from typing import List, Optional, Tuple
 
@@ -11,7 +12,7 @@ from geometry_msgs.msg import Point, PoseStamped, Quaternion, TransformStamped
 from nav_msgs.msg import Odometry, Path
 import rclpy.node
 from sensor_msgs.msg import BatteryState, NavSatFix
-from std_msgs.msg import Empty, Int32
+from std_msgs.msg import Empty, Int32, String
 from tf2_ros import TransformBroadcaster
 
 from .kct_map import KctMap, meters_to_gps
@@ -69,6 +70,7 @@ class CarMotionNode(rclpy.node.Node):
         self.pub_bms = self.create_publisher(BatteryState, "/sensors/bms/battery_state", 10)
         self.pub_pose = self.create_publisher(PoseStamped, "/buggy/car_pose", 10)
         self.pub_arrived = self.create_publisher(Int32, "/buggy/car_arrived_node", 10)
+        self.pub_status = self.create_publisher(String, "/buggy/motion_status", 10)
 
         self.tf_broadcaster = TransformBroadcaster(self)
 
@@ -102,23 +104,11 @@ class CarMotionNode(rclpy.node.Node):
         for p in msg.poses:
             wx = p.pose.position.x
             wy = p.pose.position.y
-            # Identify closest node in graph
-            closest_node_id = self._find_closest_node(wx, wy)
-            self.waypoints.append((wx, wy, closest_node_id))
+            stop_id = int(round(p.pose.position.z))
+            self.waypoints.append((wx, wy, stop_id))
 
         self.is_driving = True
         self.get_logger().info(f"Received new path with {len(self.waypoints)} waypoints.")
-
-    def _find_closest_node(self, xm: float, ym: float) -> int:
-        """Find the graph node closest to metric coordinates (xm, ym)."""
-        best_id = 0
-        best_dist = float("inf")
-        for node in self.map.nodes:
-            d = math.hypot(node["x_m"] - xm, node["y_m"] - ym)
-            if d < best_dist:
-                best_dist = d
-                best_id = node["id"]
-        return best_id
 
     def update_kinematics(self):
         """Update vehicle position along the waypoint trajectory."""
@@ -133,7 +123,7 @@ class CarMotionNode(rclpy.node.Node):
         effective_speed = 0.0
 
         if self.is_driving and self.waypoints:
-            target_x, target_y, target_node = self.waypoints[0]
+            target_x, target_y, stop_id = self.waypoints[0]
             dx = target_x - self.curr_x
             dy = target_y - self.curr_y
             dist_to_wp = math.hypot(dx, dy)
@@ -149,14 +139,16 @@ class CarMotionNode(rclpy.node.Node):
                 self.battery_pct = max(0.0, self.battery_pct - (dist_to_wp * 0.01))
                 self.waypoints.pop(0)
 
-                # Broadcast node arrival
-                msg_arr = Int32()
-                msg_arr.data = target_node
-                self.pub_arrived.publish(msg_arr)
+                # Only if this waypoint is an actual scheduled stop!
+                if stop_id > 0:
+                    self.dwell_timer_s = 2.0  # Dwell 2 seconds for passenger boarding
+                    msg_arr = Int32()
+                    msg_arr.data = stop_id
+                    self.pub_arrived.publish(msg_arr)
+                    self.get_logger().info(f"Arrived at stop node {stop_id}, dwelling for 2.0s.")
 
                 if not self.waypoints:
                     self.is_driving = False
-                    self.dwell_timer_s = self.dwell_time_s
                     self.get_logger().info("Completed all route waypoints.")
             else:
                 target_yaw = math.atan2(dy, dx)
@@ -233,6 +225,22 @@ class CarMotionNode(rclpy.node.Node):
         bms.power_supply_status = 2  # DISCHARGING
         bms.power_supply_health = 1  # GOOD
         self.pub_bms.publish(bms)
+
+        # 6. High-level motion status
+        compass_yaw_deg = (90.0 - math.degrees(self.curr_yaw)) % 360.0
+        status_msg = String()
+        status_msg.data = json.dumps({
+            "x": round(self.curr_x, 2),
+            "y": round(self.curr_y, 2),
+            "lat": round(lat, 7),
+            "lon": round(lon, 7),
+            "yaw_deg": round(compass_yaw_deg, 1),
+            "speed": round(current_speed, 2),
+            "battery": round(self.battery_pct, 1),
+            "odometer": round(self.odometer_m, 1),
+            "is_driving": self.is_driving,
+        })
+        self.pub_status.publish(status_msg)
 
 
 def main(args=None):

@@ -15,7 +15,12 @@ def test_real_osm_map_integrity():
     # Test GeoJSON conversion
     geojson = kct.to_geojson()
     assert geojson["type"] == "FeatureCollection"
-    assert len(geojson["features"]) == len(kct.edges) + len(kct.landmarks)
+    assert len(geojson["features"]) == len(kct.edges) + len(kct.nodes)
+    assert len(geojson["nodes_dict"]) == len(kct.nodes)
+
+    # Test find_nearest_node
+    nearest = kct.find_nearest_node(kct.nodes[0]["x_m"], kct.nodes[0]["y_m"])
+    assert nearest == 0
 
     # Test fine interpolation
     sample_path = [0, 1, 2]
@@ -42,6 +47,9 @@ def test_planner_single_rider_real_map():
     assert "P_A" in res["order"][0]
     assert "D_A" in res["order"][1]
     assert len(res["path_nodes"]) >= 2
+    assert len(res["legs"]) == 2
+    assert res["legs"][0]["dest_node"] == kore
+    assert res["legs"][1]["dest_node"] == admin
 
 
 def test_planner_two_riders_shared_real_map():

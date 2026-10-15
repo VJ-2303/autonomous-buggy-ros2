@@ -80,6 +80,17 @@ class KctMap:
         nb = self.nodes[b]
         return round(math.hypot(na["x_m"] - nb["x_m"], na["y_m"] - nb["y_m"]), 2)
 
+    def find_nearest_node(self, xm: float, ym: float) -> int:
+        """Find the node in the road network closest to Cartesian metric coordinates (xm, ym)."""
+        best_id = 0
+        best_dist = float("inf")
+        for i, n in enumerate(self.nodes):
+            d = math.hypot(n["x_m"] - xm, n["y_m"] - ym)
+            if d < best_dist:
+                best_dist = d
+                best_id = i
+        return best_id
+
     def interpolate_path(self, node_ids: List[int], step_meters: float = 1.0) -> List[Tuple[float, float, float, float]]:
         """
         Subdivide a sequence of road node IDs into fine-grained interpolated waypoints.
@@ -141,15 +152,16 @@ class KctMap:
                 }
             })
 
-        # Landmark Nodes
-        for node in self.landmarks:
+        # All Nodes (both landmarks and road junctions)
+        for node in self.nodes:
+            is_lm = bool(node.get("is_landmark"))
             features.append({
                 "type": "Feature",
                 "properties": {
-                    "type": "landmark",
+                    "type": "landmark" if is_lm else "junction",
                     "id": node["id"],
                     "name": node["name"],
-                    "is_landmark": True,
+                    "is_landmark": is_lm,
                 },
                 "geometry": {
                     "type": "Point",
@@ -160,6 +172,7 @@ class KctMap:
         return {
             "type": "FeatureCollection",
             "features": features,
+            "nodes_dict": {n["id"]: [n["lat"], n["lon"]] for n in self.nodes},
             "center": [CAMPUS_REF_LAT, CAMPUS_REF_LON],
             "zoom": 17,
         }

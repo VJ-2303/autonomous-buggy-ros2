@@ -33,6 +33,14 @@ class FleetManagerNode(rclpy.node.Node):
         # Start at South Gate (M Gate) or first landmark
         self.default_start_node = self.map.name_to_id.get("South Gate (M Gate)", next(iter(self.map.name_to_id.values())))
         self.current_node = self.default_start_node
+        start_node_data = self.map.nodes[self.current_node]
+        self.car_x = float(start_node_data["x_m"])
+        self.car_y = float(start_node_data["y_m"])
+        self.car_lat = float(start_node_data["lat"])
+        self.car_lon = float(start_node_data["lon"])
+        self.car_yaw_deg = 0.0
+        self.active_path_coords: List[List[float]] = []
+
         self.battery_pct = 80.0
         self.is_moving = False
         self.total_odometer_m = 0.0
@@ -58,6 +66,9 @@ class FleetManagerNode(rclpy.node.Node):
         self.sub_arrived = self.create_subscription(
             Int32, "/buggy/car_arrived_node", self.on_car_arrived_node, 10
         )
+        self.sub_motion = self.create_subscription(
+            String, "/buggy/motion_status", self.on_motion_status, 10
+        )
 
         # Publishers
         self.pub_plan = self.create_publisher(Path, "/plan", 10)
@@ -71,19 +82,43 @@ class FleetManagerNode(rclpy.node.Node):
             f"Fleet Manager Node ready. Start node: {self.map.id_to_name[self.current_node]} ({self.current_node})"
         )
 
+    def on_motion_status(self, msg: String):
+        """Update real-time vehicle kinematics from car_motion_node."""
+        try:
+            d = json.loads(msg.data)
+            self.car_x = float(d["x"])
+            self.car_y = float(d["y"])
+            self.car_lat = float(d["lat"])
+            self.car_lon = float(d["lon"])
+            self.car_yaw_deg = float(d["yaw_deg"])
+            self.battery_pct = float(d["battery"])
+            self.total_odometer_m = float(d["odometer"])
+            self.is_moving = bool(d["is_driving"])
+            self.current_node = self.map.find_nearest_node(self.car_x, self.car_y)
+        except Exception:
+            pass
+
     def on_bms_state(self, msg: BatteryState):
         """Update battery state from live BMS or simulation."""
         self.battery_pct = float(msg.percentage * 100.0 if msg.percentage <= 1.0 else msg.percentage)
 
     def on_reset(self, _msg: Empty):
         """Reset fleet manager state to beginning."""
+        start_node_data = self.map.nodes[self.default_start_node]
         self.current_node = self.default_start_node
+        self.car_x = float(start_node_data["x_m"])
+        self.car_y = float(start_node_data["y_m"])
+        self.car_lat = float(start_node_data["lat"])
+        self.car_lon = float(start_node_data["lon"])
+        self.car_yaw_deg = 0.0
         self.battery_pct = 80.0
         self.is_moving = False
+        self.total_odometer_m = 0.0
         self.riders.clear()
         self.next_rider_idx = 0
         self.active_plan = None
         self.stop_queue.clear()
+        self.active_path_coords.clear()
         self.event_logs.append(f"Reset car to {self.map.id_to_name[self.current_node]}.")
         self.publish_empty_plan()
         self.get_logger().info("Fleet manager reset.")
@@ -126,8 +161,11 @@ class FleetManagerNode(rclpy.node.Node):
                 self.event_logs.append(f"Rider {rider_id} rejected: Car at maximum 4 seats capacity.")
                 return
 
+            # If car is currently moving, plan from the node closest to its live position
+            start_planning_node = self.map.find_nearest_node(self.car_x, self.car_y)
+
             plan_result = self.planner.plan(
-                car_node=self.current_node,
+                car_node=start_planning_node,
                 battery_pct=self.battery_pct,
                 active_riders=active,
                 new_rider=new_rider,
@@ -156,15 +194,14 @@ class FleetManagerNode(rclpy.node.Node):
             )
 
             # Publish ROS 2 nav_msgs/Path and target goal
-            self.publish_ros_plan(plan_result.get("path_nodes", []))
+            self.publish_ros_plan(plan_result)
 
         except Exception as e:
             self.get_logger().error(f"Error handling book request: {e}")
 
     def on_car_arrived_node(self, msg: Int32):
-        """Called when simulated or real car reaches a road node."""
+        """Called when simulated or real car reaches a scheduled stop node."""
         node_id = msg.data
-        self.current_node = node_id
 
         # Check if any stops in the queue are at this node
         if self.stop_queue and self.stop_queue[0]["node"] == node_id:
@@ -187,6 +224,7 @@ class FleetManagerNode(rclpy.node.Node):
 
         if not self.stop_queue:
             self.is_moving = False
+            self.active_path_coords.clear()
 
     def _resolve_node_id(self, val) -> Optional[int]:
         """Convert name or int to valid node id."""
@@ -205,31 +243,63 @@ class FleetManagerNode(rclpy.node.Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = "map"
         self.pub_plan.publish(msg)
+        self.active_path_coords.clear()
 
-    def publish_ros_plan(self, path_node_ids: List[int]):
+    def publish_ros_plan(self, plan_result: Dict):
         """Publish standard nav_msgs/msg/Path across fine-grained smooth interpolated waypoints."""
-        if not path_node_ids:
+        legs = plan_result.get("legs", [])
+        if not legs:
             return
 
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
         path_msg.header.frame_id = "map"
 
-        fine_points = self.map.interpolate_path(path_node_ids, step_meters=1.5)
+        fine_path_points: List[Tuple[float, float, float, float, int]] = []
 
-        for xm, ym, lat, lon in fine_points:
+        # Prepend smooth transition from car's live pose to the first node of the plan
+        first_node = legs[0]["path"][0] if legs[0]["path"] else self.current_node
+        first_node_data = self.map.nodes[first_node]
+        dist_to_start = math.hypot(self.car_x - first_node_data["x_m"], self.car_y - first_node_data["y_m"])
+
+        if dist_to_start > 1.5:
+            steps = max(1, int(math.ceil(dist_to_start / 1.5)))
+            for s in range(steps):
+                alpha = s / float(steps)
+                xm = self.car_x + alpha * (first_node_data["x_m"] - self.car_x)
+                ym = self.car_y + alpha * (first_node_data["y_m"] - self.car_y)
+                lat, lon = meters_to_gps(xm, ym)
+                fine_path_points.append((xm, ym, lat, lon, 0))
+
+        for leg in legs:
+            leg_nodes = leg["path"]
+            dest_node = leg["dest_node"]
+            if not leg_nodes:
+                continue
+            leg_fine = self.map.interpolate_path(leg_nodes, step_meters=1.5)
+            # Intermediate waypoints have stop_id = 0
+            for xm, ym, lat, lon in leg_fine[:-1]:
+                fine_path_points.append((xm, ym, lat, lon, 0))
+            # The destination of this leg is an actual STOP: stop_id = dest_node
+            if leg_fine:
+                last_xm, last_ym, last_lat, last_lon = leg_fine[-1]
+                fine_path_points.append((last_xm, last_ym, last_lat, last_lon, dest_node))
+
+        for xm, ym, lat, lon, stop_id in fine_path_points:
             pose = PoseStamped()
             pose.header = path_msg.header
             pose.pose.position.x = float(xm)
             pose.pose.position.y = float(ym)
-            pose.pose.position.z = 0.0
+            pose.pose.position.z = float(stop_id)
             pose.pose.orientation.w = 1.0
             path_msg.poses.append(pose)
 
         self.pub_plan.publish(path_msg)
-
         if path_msg.poses:
             self.pub_goal.publish(path_msg.poses[-1])
+
+        # Save continuous coordinates for frontend polyline
+        self.active_path_coords = [[round(lat, 6), round(lon, 6)] for _, _, lat, lon, _ in fine_path_points]
 
     def publish_telemetry(self):
         """Publish real-time telemetry JSON for web clients and monitoring."""
@@ -239,10 +309,11 @@ class FleetManagerNode(rclpy.node.Node):
             "car": {
                 "node_id": self.current_node,
                 "node_name": cur_node_data["name"],
-                "x_m": cur_node_data["x_m"],
-                "y_m": cur_node_data["y_m"],
-                "lat": cur_node_data["lat"],
-                "lon": cur_node_data["lon"],
+                "x_m": round(self.car_x, 2),
+                "y_m": round(self.car_y, 2),
+                "lat": round(self.car_lat, 7),
+                "lon": round(self.car_lon, 7),
+                "yaw": round(self.car_yaw_deg, 1),
                 "battery": round(self.battery_pct, 1),
                 "is_moving": self.is_moving,
                 "odometer_m": round(self.total_odometer_m, 1),
@@ -251,7 +322,10 @@ class FleetManagerNode(rclpy.node.Node):
             },
             "riders": self.riders,
             "queue": [f"{s['type']}_{s['rider_id']}" for s in self.stop_queue],
-            "decision": self.active_plan,
+            "decision": {
+                **(self.active_plan or {}),
+                "path_coords": self.active_path_coords if self.is_moving else [],
+            },
             "logs": self.event_logs[-30:],
         }
 

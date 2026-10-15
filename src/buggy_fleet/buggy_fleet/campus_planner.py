@@ -222,6 +222,7 @@ class CampusPlanner:
         dijkstra_nodes_explored = 0
 
         stop_entries = []
+        legs = []
         for k, r in best_order:
             dest_node = r["pickup"] if k == "P" else r["drop"]
             leg_path, leg_len, a_exp = self.astar(loc, dest_node)
@@ -231,6 +232,13 @@ class CampusPlanner:
 
             if len(leg_path) > 1:
                 full_node_path.extend(leg_path[1:])
+            legs.append({
+                "type": k,
+                "rider_id": r["id"],
+                "dest_node": dest_node,
+                "path": leg_path,
+                "length_m": leg_len,
+            })
             loc = dest_node
             stop_entries.append({"type": k, "rider_id": r["id"], "node": dest_node})
 
@@ -248,6 +256,7 @@ class CampusPlanner:
             "battery_used": battery_used,
             "battery_left": battery_left,
             "order": [f"{k}_{r['id']}" for k, r in best_order],
+            "legs": legs,
             "stops": stop_entries,
             "path_nodes": full_node_path,
             "path_names": [self.map.id_to_name[i] for i in full_node_path if self.map.nodes[i]["is_landmark"]],
