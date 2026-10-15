@@ -120,13 +120,23 @@ async def websocket_telemetry(websocket: WebSocket):
             connected_clients.remove(websocket)
 
 
-# Mount static directory for frontend web portal
-static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../web/static"))
-if not os.path.isdir(static_dir):
-    # Fallback to current working directory
-    static_dir = os.path.abspath("web/static")
+def _find_static_dir() -> Optional[str]:
+    candidates = [
+        os.path.expanduser("~/Code/autonomous/web/static"),
+        os.path.abspath("web/static"),
+    ]
+    curr = os.path.abspath(__file__)
+    for _ in range(7):
+        candidates.append(os.path.join(curr, "web", "static"))
+        curr = os.path.dirname(curr)
+    for c in candidates:
+        if os.path.isdir(c) and os.path.exists(os.path.join(c, "index.html")):
+            return c
+    return None
 
-if os.path.isdir(static_dir):
+
+static_dir = _find_static_dir()
+if static_dir:
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
     @app.get("/")
