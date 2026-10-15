@@ -80,7 +80,7 @@ class CarMotionNode(rclpy.node.Node):
 
     def on_reset(self, _msg: Empty):
         """Reset car to initial position."""
-        start_node = self.map.name_to_id.get("M Gate", 8)
+        start_node = self.map.name_to_id.get("South Gate (M Gate)", next(iter(self.map.name_to_id.values())))
         start_data = self.map.nodes[start_node]
         self.curr_x = float(start_data["x_m"])
         self.curr_y = float(start_data["y_m"])
@@ -88,9 +88,9 @@ class CarMotionNode(rclpy.node.Node):
         self.waypoints.clear()
         self.dwell_timer_s = 0.0
         self.is_driving = False
-        self.battery_pct = self.get_parameter("initial_battery").as_double()
+        self.battery_pct = float(self.get_parameter("initial_battery").value)
         self.odometer_m = 0.0
-        self.get_logger().info("Car motion reset to M Gate.")
+        self.get_logger().info("Car motion reset to South Gate (M Gate).")
 
     def on_new_plan(self, msg: Path):
         """Receive new path waypoints from planner."""

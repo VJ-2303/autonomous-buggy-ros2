@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Set
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 import rclpy
 import rclpy.node
@@ -65,6 +65,11 @@ class WebBridgeNode(rclpy.node.Node):
 
     def request_reset(self):
         self.pub_reset.publish(Empty())
+
+
+@app.get("/favicon.ico")
+async def get_favicon():
+    return Response(status_code=204)
 
 
 @app.get("/api/map")
