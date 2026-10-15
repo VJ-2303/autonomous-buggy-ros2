@@ -1,138 +1,73 @@
-"""KCT Campus Map: Georeferenced graph definition and coordinate transformations."""
+"""
+KCT Campus Map: Real OpenStreetMap (OSM) Road Network, Georeferenced Coordinates,
+and Smooth Trajectory Generation.
+"""
 
+import json
 import math
-from typing import Dict, List, Tuple
+import os
+from typing import Dict, List, Optional, Tuple
 
-# Calibration settings from doc/campus_nav.py
-SCALE_METERS_PER_PIXEL = 0.6  # 1 pixel = 0.6 metres
-
-# Real-world Anchor: Kumaraguru College of Technology (KCT, Coimbatore)
-# Campus Center reference point (near Admin Block / The Orb)
-CAMPUS_REF_PIXEL_X = 500.0
-CAMPUS_REF_PIXEL_Y = 500.0
-CAMPUS_REF_LAT = 11.079700
-CAMPUS_REF_LON = 76.992500
-
+CAMPUS_REF_LAT = 11.077800
+CAMPUS_REF_LON = 76.988500
 METERS_PER_DEGREE_LAT = 110600.0
 METERS_PER_DEGREE_LON = 111320.0 * math.cos(math.radians(CAMPUS_REF_LAT))
 
-# The 37 Nodes from doc/campus_nav.py & index.html
-# Format: (name, pixel_x, pixel_y, is_landmark)
-RAW_NODES: List[Tuple[str, int, int, int]] = [
-    ("Main Gate", 740, 67, 1),
-    ("Craft", 730, 310, 1),
-    ("Junction", 725, 401, 0),
-    ("Junction", 732, 507, 0),
-    ("G Hostel", 755, 737, 1),
-    ("Junction", 770, 773, 0),
-    ("Junction", 785, 913, 0),
-    ("Junction", 530, 927, 0),
-    ("M Gate", 430, 931, 1),
-    ("Junction", 397, 936, 0),
-    ("Junction", 233, 940, 0),
-    ("Junction", 78, 947, 0),
-    ("Back Gate", 45, 952, 1),
-    ("Junction", 88, 638, 0),
-    ("Junction", 95, 422, 0),
-    ("KVB", 160, 420, 1),
-    ("Junction", 245, 410, 0),
-    ("Kore", 323, 407, 1),
-    ("Junction", 502, 404, 0),
-    ("The Orb", 580, 407, 1),
-    ("B Block", 248, 318, 1),
-    ("A Block", 255, 208, 1),
-    ("E Block", 258, 80, 1),
-    ("OSA", 108, 323, 1),
-    ("Garage", 118, 243, 1),
-    ("Junction", 120, 150, 0),
-    ("Junction", 188, 13, 0),
-    ("C Block", 238, 527, 1),
-    ("Auditorium", 238, 608, 1),
-    ("Junction", 238, 738, 0),
-    ("F Block", 345, 738, 1),
-    ("Junction", 397, 736, 0),
-    ("Junction", 513, 728, 0),
-    ("Junction", 518, 760, 0),
-    ("AP Backside", 625, 777, 1),
-    ("Junction", 507, 513, 0),
-    ("Admin Block", 610, 507, 1),
-]
 
-# The 45 Edges connecting nodes
-RAW_EDGES: List[Tuple[int, int]] = [
-    (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 9), (9, 10), (10, 11), (11, 12),
-    (14, 13), (13, 11), (14, 23), (23, 24), (24, 25), (14, 15), (15, 16), (16, 17), (17, 18), (18, 19),
-    (19, 2), (16, 20), (20, 21), (21, 22), (16, 27), (27, 28), (28, 29), (29, 10), (25, 26), (26, 22),
-    (13, 28), (29, 30), (30, 31), (31, 32), (31, 9), (18, 35), (35, 32), (32, 33), (33, 7), (35, 36),
-    (36, 3), (33, 34), (34, 5),
-]
+def gps_to_meters(lat: float, lon: float) -> Tuple[float, float]:
+    """Convert GPS coordinates (lat, lon) to local Cartesian metric coordinates (x_m, y_m)."""
+    xm = (lon - CAMPUS_REF_LON) * METERS_PER_DEGREE_LON
+    ym = (lat - CAMPUS_REF_LAT) * METERS_PER_DEGREE_LAT
+    return xm, ym
 
 
-def pixel_to_meters(px: float, py: float) -> Tuple[float, float]:
-    """Convert drawing pixel coordinates to local Cartesian metric coordinates (x_east, y_north)."""
-    dx_meters = (px - CAMPUS_REF_PIXEL_X) * SCALE_METERS_PER_PIXEL
-    dy_meters = (CAMPUS_REF_PIXEL_Y - py) * SCALE_METERS_PER_PIXEL
-    return dx_meters, dy_meters
-
-
-def meters_to_pixel(xm: float, ym: float) -> Tuple[float, float]:
-    """Convert local Cartesian metric coordinates to drawing pixel coordinates."""
-    px = CAMPUS_REF_PIXEL_X + (xm / SCALE_METERS_PER_PIXEL)
-    py = CAMPUS_REF_PIXEL_Y - (ym / SCALE_METERS_PER_PIXEL)
-    return px, py
-
-
-def pixel_to_gps(px: float, py: float) -> Tuple[float, float]:
-    """Convert drawing pixel coordinates to real GPS coordinates (latitude, longitude)."""
-    dx_meters, dy_meters = pixel_to_meters(px, py)
-    lat = CAMPUS_REF_LAT + (dy_meters / METERS_PER_DEGREE_LAT)
-    lon = CAMPUS_REF_LON + (dx_meters / METERS_PER_DEGREE_LON)
+def meters_to_gps(xm: float, ym: float) -> Tuple[float, float]:
+    """Convert local Cartesian metric coordinates (x_m, y_m) to GPS coordinates (lat, lon)."""
+    lat = CAMPUS_REF_LAT + (ym / METERS_PER_DEGREE_LAT)
+    lon = CAMPUS_REF_LON + (xm / METERS_PER_DEGREE_LON)
     return lat, lon
 
 
-def gps_to_pixel(lat: float, lon: float) -> Tuple[float, float]:
-    """Convert GPS coordinates to drawing pixel coordinates."""
-    dy_meters = (lat - CAMPUS_REF_LAT) * METERS_PER_DEGREE_LAT
-    dx_meters = (lon - CAMPUS_REF_LON) * METERS_PER_DEGREE_LON
-    return meters_to_pixel(dx_meters, dy_meters)
-
-
-def gps_to_meters(lat: float, lon: float) -> Tuple[float, float]:
-    """Convert GPS coordinates to local Cartesian metric coordinates."""
-    px, py = gps_to_pixel(lat, lon)
-    return pixel_to_meters(px, py)
-
-
 class KctMap:
-    """Represents the complete KCT campus road network with both metric and GPS coordinates."""
+    """Represents the real KCT campus road network extracted from OpenStreetMap."""
 
-    def __init__(self):
-        self.nodes = []
+    def __init__(self, json_path: Optional[str] = None):
+        if json_path is None:
+            # Look in package directory or resource folder
+            candidates = [
+                os.path.join(os.path.dirname(__file__), "../resource/kct_osm_network.json"),
+                os.path.join(os.path.dirname(__file__), "../../resource/kct_osm_network.json"),
+                os.path.abspath("src/buggy_fleet/resource/kct_osm_network.json"),
+                "/opt/ros/jazzy/share/buggy_fleet/resource/kct_osm_network.json",
+            ]
+            for path in candidates:
+                if os.path.isfile(path):
+                    json_path = path
+                    break
+
+        if json_path and os.path.isfile(json_path):
+            with open(json_path, "r") as f:
+                data = json.load(f)
+        else:
+            raise FileNotFoundError(f"Could not find kct_osm_network.json in candidates: {candidates}")
+
+        self.nodes = data["nodes"]
+        self.edges = [tuple(e) for e in data["edges"]]
+        self.landmarks_data = data["landmarks"]
+
         self.name_to_id: Dict[str, int] = {}
         self.id_to_name: Dict[int, str] = {}
         self.landmarks: List[Dict] = []
 
-        for idx, (name, px, py, is_landmark) in enumerate(RAW_NODES):
-            lat, lon = pixel_to_gps(px, py)
-            xm, ym = pixel_to_meters(px, py)
-            node_data = {
-                "id": idx,
-                "name": name,
-                "px": px,
-                "py": py,
-                "x_m": xm,
-                "y_m": ym,
-                "lat": lat,
-                "lon": lon,
-                "is_landmark": bool(is_landmark),
-            }
-            self.nodes.append(node_data)
+        for node in self.nodes:
+            idx = node["id"]
+            name = node["name"]
             self.id_to_name[idx] = name
-            if is_landmark:
+            if node.get("is_landmark"):
                 self.name_to_id[name] = idx
-                self.landmarks.append(node_data)
+                self.landmarks.append(node)
 
-        self.edges = RAW_EDGES
+        # Adjacency list
         self.adj: Dict[int, List[Tuple[int, float]]] = {i: [] for i in range(len(self.nodes))}
         for u, v in self.edges:
             w = self.dist_nodes(u, v)
@@ -140,16 +75,51 @@ class KctMap:
             self.adj[v].append((u, w))
 
     def dist_nodes(self, a: int, b: int) -> float:
-        """Straight-line metric distance in metres between two nodes."""
+        """Metric distance in metres between two nodes."""
         na = self.nodes[a]
         nb = self.nodes[b]
-        return round(math.hypot(na["px"] - nb["px"], na["py"] - nb["py"]) * SCALE_METERS_PER_PIXEL, 1)
+        return round(math.hypot(na["x_m"] - nb["x_m"], na["y_m"] - nb["y_m"]), 2)
+
+    def interpolate_path(self, node_ids: List[int], step_meters: float = 1.0) -> List[Tuple[float, float, float, float]]:
+        """
+        Subdivide a sequence of road node IDs into fine-grained interpolated waypoints.
+        Returns: list of (x_m, y_m, lat, lon) tuples spaced evenly for smooth vehicle motion.
+        """
+        if not node_ids:
+            return []
+
+        fine_points: List[Tuple[float, float, float, float]] = []
+
+        for i in range(len(node_ids) - 1):
+            u = node_ids[i]
+            v = node_ids[i + 1]
+            nu = self.nodes[u]
+            nv = self.nodes[v]
+
+            dx = nv["x_m"] - nu["x_m"]
+            dy = nv["y_m"] - nu["y_m"]
+            seg_len = math.hypot(dx, dy)
+
+            steps = max(1, int(math.ceil(seg_len / step_meters)))
+
+            for s in range(steps):
+                alpha = s / float(steps)
+                xm = nu["x_m"] + alpha * dx
+                ym = nu["y_m"] + alpha * dy
+                lat, lon = meters_to_gps(xm, ym)
+                fine_points.append((round(xm, 2), round(ym, 2), lat, lon))
+
+        # Add final destination point
+        last_node = self.nodes[node_ids[-1]]
+        fine_points.append((last_node["x_m"], last_node["y_m"], last_node["lat"], last_node["lon"]))
+
+        return fine_points
 
     def to_geojson(self) -> Dict:
-        """Export the road network and landmark nodes as a GeoJSON FeatureCollection for Leaflet/OSM."""
+        """Export real OSM road network and landmarks as GeoJSON for Leaflet."""
         features = []
 
-        # Road network LineStrings
+        # Road segments
         for u, v in self.edges:
             nu = self.nodes[u]
             nv = self.nodes[v]
@@ -171,15 +141,15 @@ class KctMap:
                 }
             })
 
-        # Landmark Points
-        for node in self.nodes:
+        # Landmark Nodes
+        for node in self.landmarks:
             features.append({
                 "type": "Feature",
                 "properties": {
-                    "type": "landmark" if node["is_landmark"] else "junction",
+                    "type": "landmark",
                     "id": node["id"],
                     "name": node["name"],
-                    "is_landmark": node["is_landmark"],
+                    "is_landmark": True,
                 },
                 "geometry": {
                     "type": "Point",

@@ -14,7 +14,7 @@ from sensor_msgs.msg import BatteryState, NavSatFix
 from std_msgs.msg import Empty, Int32
 from tf2_ros import TransformBroadcaster
 
-from .kct_map import KctMap, meters_to_pixel, pixel_to_gps
+from .kct_map import KctMap, meters_to_gps
 
 
 def yaw_to_quaternion(yaw: float) -> Quaternion:
@@ -38,7 +38,7 @@ class CarMotionNode(rclpy.node.Node):
         # Parameters
         self.declare_parameter("speed_mps", 5.0)
         self.declare_parameter("sim_speed_multiplier", 3.0)  # 3x speed for fluid interactive demo
-        self.declare_parameter("dwell_time_s", 1.5)
+        self.declare_parameter("dwell_time_s", 1.0)
         self.declare_parameter("initial_battery", 80.0)
 
         self.speed_mps = float(self.get_parameter("speed_mps").value)
@@ -46,8 +46,8 @@ class CarMotionNode(rclpy.node.Node):
         self.dwell_time_s = float(self.get_parameter("dwell_time_s").value)
         self.battery_pct = float(self.get_parameter("initial_battery").value)
 
-        # Start position at M Gate (node 8)
-        start_node = self.map.name_to_id.get("M Gate", 8)
+        # Start position at South Gate (M Gate) or first landmark
+        start_node = self.map.name_to_id.get("South Gate (M Gate)", next(iter(self.map.name_to_id.values())))
         start_data = self.map.nodes[start_node]
         self.curr_x = float(start_data["x_m"])
         self.curr_y = float(start_data["y_m"])
@@ -143,7 +143,6 @@ class CarMotionNode(rclpy.node.Node):
             effective_speed = self.speed_mps * self.sim_speed_multiplier
 
             if dist_to_wp <= step:
-                # Arrived at this waypoint
                 self.curr_x = target_x
                 self.curr_y = target_y
                 self.odometer_m += dist_to_wp
@@ -155,15 +154,16 @@ class CarMotionNode(rclpy.node.Node):
                 msg_arr.data = target_node
                 self.pub_arrived.publish(msg_arr)
 
-                # Dwell momentarily if reaching a landmark
-                if self.map.nodes[target_node]["is_landmark"]:
-                    self.dwell_timer_s = self.dwell_time_s
-
                 if not self.waypoints:
                     self.is_driving = False
+                    self.dwell_timer_s = self.dwell_time_s
                     self.get_logger().info("Completed all route waypoints.")
             else:
-                self.curr_yaw = math.atan2(dy, dx)
+                target_yaw = math.atan2(dy, dx)
+                # Angular interpolation for smooth realistic vehicle turning
+                yaw_diff = (target_yaw - self.curr_yaw + math.pi) % (2 * math.pi) - math.pi
+                self.curr_yaw += yaw_diff * min(1.0, 15.0 * self.dt)
+
                 self.curr_x += (dx / dist_to_wp) * step
                 self.curr_y += (dy / dist_to_wp) * step
                 self.odometer_m += step
@@ -205,9 +205,8 @@ class CarMotionNode(rclpy.node.Node):
         pose.pose = odom.pose.pose
         self.pub_pose.publish(pose)
 
-        # 4. GPS Fix (Convert metric coords back to WGS84 Lat/Lon)
-        px, py = meters_to_pixel(self.curr_x, self.curr_y)
-        lat, lon = pixel_to_gps(px, py)
+        # 4. GPS Fix (Directly from metric to real WGS84 Lat/Lon)
+        lat, lon = meters_to_gps(self.curr_x, self.curr_y)
 
         gps = NavSatFix()
         gps.header.stamp = stamp

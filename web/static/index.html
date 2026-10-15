@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
-  <title>KCT Autonomous Buggy — Campus Transit</title>
+  <title>KCT Autonomous Buggy — Satellite Campus Transit</title>
   
   <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -21,11 +21,11 @@
       --text-dim: #64748b;
       --accent: #2563eb;
       --accent-hover: #1d4ed8;
-      --accent-light: rgba(37, 99, 235, 0.15);
+      --accent-light: rgba(37, 99, 235, 0.2);
       --success: #10b981;
       --warning: #f59e0b;
       --danger: #ef4444;
-      --car-yellow: #f59e0b;
+      --car-glow: rgba(56, 189, 248, 0.9);
       --radius-sm: 8px;
       --radius-md: 12px;
       --radius-lg: 18px;
@@ -50,7 +50,7 @@
       width: 100vw;
     }
 
-    /* Full-screen immersive map */
+    /* Full-screen high-res map */
     #map {
       position: absolute;
       top: 0;
@@ -60,28 +60,27 @@
       width: 100%;
       height: 100%;
       z-index: 1;
-      background: #0f172a;
+      background: #090d16;
     }
 
-    /* Move Leaflet controls to top-right to avoid drawer collision */
-    .leaflet-top.leaflet-left {
-      left: auto;
-      right: 14px;
+    /* Position Leaflet controls cleanly */
+    .leaflet-top.leaflet-right {
       top: calc(76px + var(--safe-top));
+      right: 14px;
     }
     .leaflet-bar {
       border: 1px solid var(--border) !important;
       border-radius: var(--radius-sm) !important;
       overflow: hidden;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
     }
     .leaflet-bar a {
-      background: var(--surface) !important;
+      background: rgba(19, 27, 46, 0.9) !important;
       color: var(--text) !important;
       border-bottom: 1px solid var(--border) !important;
     }
 
-    /* Floating Top App Header */
+    /* Floating Top Header */
     .top-nav {
       position: absolute;
       top: calc(12px + var(--safe-top));
@@ -92,12 +91,12 @@
       justify-content: space-between;
       align-items: center;
       padding: 8px 14px;
-      background: rgba(19, 27, 46, 0.88);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      background: rgba(11, 15, 25, 0.88);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
       border: 1px solid var(--border);
       border-radius: 9999px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
       max-width: 860px;
       margin: 0 auto;
     }
@@ -116,17 +115,16 @@
       align-items: center;
       justify-content: center;
       font-size: 15px;
-      font-weight: 800;
       color: #fff;
     }
     .brand-text h1 {
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       font-weight: 700;
       letter-spacing: -0.01em;
       line-height: 1.15;
     }
     .brand-text p {
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       color: var(--text-muted);
       line-height: 1;
     }
@@ -136,7 +134,6 @@
       align-items: center;
       gap: 8px;
     }
-
     .pill-chip {
       display: inline-flex;
       align-items: center;
@@ -180,33 +177,60 @@
       border-color: var(--text-muted);
     }
 
-    /* Unified Sheet / Sidebar */
+    /* Layer Toggle Control */
+    .map-layer-toggle {
+      position: absolute;
+      top: calc(76px + var(--safe-top));
+      left: 14px;
+      z-index: 1000;
+      display: flex;
+      background: rgba(19, 27, 46, 0.9);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    .layer-btn {
+      padding: 6px 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .layer-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* Unified Drawer / Sidebar */
     .drawer-panel {
       position: absolute;
       z-index: 1001;
-      background: rgba(19, 27, 46, 0.94);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
       border: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
       transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* Desktop View: Left floating side panel */
     @media (min-width: 901px) {
       .drawer-panel {
         top: calc(76px + var(--safe-top));
         left: 18px;
         bottom: 20px;
-        width: 410px;
+        width: 420px;
         border-radius: var(--radius-lg);
       }
       .drag-handle { display: none; }
     }
 
-    /* Mobile View: Slide-up Bottom Sheet */
     @media (max-width: 900px) {
       .drawer-panel {
         left: 0;
@@ -268,7 +292,7 @@
       color: #fff;
     }
 
-    /* Drawer Scrollable Content */
+    /* Drawer Body */
     .drawer-body {
       flex: 1;
       overflow-y: auto;
@@ -278,7 +302,6 @@
       gap: 14px;
     }
 
-    /* Compact Peek Status Bar (visible on mobile in collapsed state) */
     .peek-status {
       display: flex;
       justify-content: space-between;
@@ -291,11 +314,11 @@
       font-weight: 700;
     }
     .peek-info span {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--text-muted);
     }
 
-    /* Form & Booking Card */
+    /* Booking Card */
     .booking-box {
       background: var(--surface-elevated);
       border: 1px solid var(--border);
@@ -309,7 +332,6 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
-      position: relative;
     }
     .input-row {
       display: flex;
@@ -337,7 +359,7 @@
       color: var(--text);
     }
 
-    /* Quick Chips */
+    /* Popular Landmark Chips */
     .chips-row {
       display: flex;
       gap: 6px;
@@ -382,7 +404,7 @@
     }
     .btn-main:hover { background: var(--accent-hover); }
 
-    /* Telemetry Metric Cards */
+    /* Telemetry Grid */
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -412,7 +434,6 @@
       margin-top: 2px;
     }
 
-    /* Seats Visual Dots */
     .seats-visual {
       display: flex;
       gap: 5px;
@@ -429,7 +450,6 @@
       box-shadow: 0 0 6px var(--accent);
     }
 
-    /* Battery progress bar */
     .battery-track {
       width: 100%;
       height: 6px;
@@ -445,7 +465,6 @@
       transition: width 0.4s ease, background 0.4s ease;
     }
 
-    /* Riders & Stop Order Queue */
     .section-title {
       font-size: 0.78rem;
       font-weight: 700;
@@ -502,7 +521,6 @@
     .tag-done { background: rgba(16, 185, 129, 0.15); color: var(--success); }
     .tag-rejected { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
 
-    /* Stop Stepper */
     .stop-stepper {
       display: flex;
       align-items: center;
@@ -525,7 +543,6 @@
       font-weight: 600;
     }
 
-    /* Diagnostics Log */
     .log-container {
       background: var(--bg);
       border: 1px solid var(--border);
@@ -546,24 +563,38 @@
       line-height: 1.35;
     }
 
-    /* Custom Map Markers */
-    .buggy-car-marker {
-      background: var(--car-yellow);
-      border: 2px solid #000;
+    /* Modern Vehicle Icon with Heading Direction Arrow */
+    .vehicle-marker-wrapper {
+      position: relative;
+      width: 34px;
+      height: 34px;
+      will-change: transform;
+    }
+    .vehicle-body {
+      width: 32px;
+      height: 32px;
+      background: #0284c7;
+      border: 2px solid #ffffff;
       border-radius: 50%;
-      box-shadow: 0 0 14px rgba(245, 158, 11, 0.9);
+      box-shadow: 0 0 16px var(--car-glow);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #000;
+      color: #ffffff;
       font-weight: 900;
-      font-size: 12px;
+      font-size: 13px;
+      position: relative;
     }
-    .kct-pin-marker {
-      background: var(--surface);
-      border: 2px solid var(--accent);
-      border-radius: 50%;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    .vehicle-heading-arrow {
+      position: absolute;
+      top: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-bottom: 8px solid #ffffff;
     }
   </style>
 </head>
@@ -572,13 +603,19 @@
   <!-- Full-Screen Map Container -->
   <div id="map"></div>
 
+  <!-- Map Layer Selector -->
+  <div class="map-layer-toggle">
+    <button class="layer-btn active" id="btn-layer-sat">Satellite</button>
+    <button class="layer-btn" id="btn-layer-osm">Street</button>
+  </div>
+
   <!-- Floating Header -->
   <header class="top-nav">
     <div class="brand">
       <div class="brand-icon">⚡</div>
       <div class="brand-text">
         <h1>KCT Buggy</h1>
-        <p>Autonomous Campus Transit</p>
+        <p>Live Campus Transit</p>
       </div>
     </div>
     <div class="top-actions">
@@ -586,22 +623,20 @@
         <span class="pulse-dot" id="ws-indicator"></span>
         <span id="ws-label">Online</span>
       </div>
-      <button class="btn-icon" id="btn-reset" title="Reset Car to M Gate">↺</button>
+      <button class="btn-icon" id="btn-reset" title="Reset Car to Starting Gate">↺</button>
     </div>
   </header>
 
   <!-- Mobile-First Adaptive Bottom Sheet / Desktop Sidebar -->
   <aside class="drawer-panel" id="drawer">
-    <!-- Drag handle for mobile gesture / tap -->
     <div class="drag-handle" id="drag-handle">
       <div class="drag-bar"></div>
     </div>
 
-    <!-- Drawer Header & Navigation Tabs -->
     <div class="drawer-header">
       <div class="peek-status">
         <div class="peek-info">
-          <h2 id="peek-loc">M Gate</h2>
+          <h2 id="peek-loc">KCT Campus</h2>
           <span id="peek-status-desc">Car Idle • 4 Seats Available</span>
         </div>
         <div style="text-align: right;">
@@ -616,9 +651,7 @@
       </div>
     </div>
 
-    <!-- Drawer Body -->
     <div class="drawer-body">
-
       <!-- TAB 1: RIDE BOOKING -->
       <section id="tab-book" class="tab-content" style="display: flex; flex-direction: column; gap: 12px;">
         <div class="booking-box">
@@ -637,17 +670,20 @@
             </div>
           </div>
 
-          <!-- Quick Campus Destination Chips -->
+          <!-- Quick Campus Landmark Chips -->
           <div>
-            <span style="font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Popular Stops</span>
+            <span style="font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Campus Landmarks</span>
             <div class="chips-row" style="margin-top: 5px;">
-              <span class="chip" data-dest="Main Gate">Main Gate</span>
+              <span class="chip" data-dest="Main Gate (North)">Main Gate</span>
               <span class="chip" data-dest="Admin Block">Admin Block</span>
-              <span class="chip" data-dest="Kore">Kore</span>
-              <span class="chip" data-dest="The Orb">The Orb</span>
-              <span class="chip" data-dest="G Hostel">G Hostel</span>
+              <span class="chip" data-dest="KCT Tech Park">Tech Park</span>
+              <span class="chip" data-dest="Kore Food Court">Kore</span>
               <span class="chip" data-dest="Auditorium">Auditorium</span>
-              <span class="chip" data-dest="Back Gate">Back Gate</span>
+              <span class="chip" data-dest="Central Library">Library</span>
+              <span class="chip" data-dest="F Block">F Block</span>
+              <span class="chip" data-dest="Campus Dining">Dining</span>
+              <span class="chip" data-dest="Men Hostels (MH 2/3)">Hostels (MH2)</span>
+              <span class="chip" data-dest="South Gate (M Gate)">South Gate</span>
             </div>
           </div>
 
@@ -656,7 +692,6 @@
           </button>
         </div>
 
-        <!-- Real-time Multi-Rider Active Pool -->
         <div style="display: flex; flex-direction: column; gap: 8px;">
           <div class="section-title">
             <span>Active Passengers</span>
@@ -692,7 +727,6 @@
           </div>
         </div>
 
-        <!-- Active Stop Sequence -->
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <span class="section-title">Active Stop Order</span>
           <div class="stop-stepper" id="stop-stepper">
@@ -700,11 +734,10 @@
           </div>
         </div>
 
-        <!-- Algorithm Diagnostics -->
         <div class="booking-box" style="font-size: 0.75rem;">
-          <div class="section-title" style="margin-bottom: 6px;">Planner Constraints</div>
+          <div class="section-title" style="margin-bottom: 6px;">Planner Status</div>
           <div id="decision-text" style="color: var(--text-muted); line-height: 1.45;">
-            Dijkstra & A* ready. 1.5x detour limit, 20% battery reserve active.
+            Dijkstra & A* routing active. Detour ratio &le; 1.5x, minimum 20% reserve enforced.
           </div>
         </div>
       </section>
@@ -714,49 +747,111 @@
         <div class="section-title">Live Dispatch Feed</div>
         <div class="log-container" id="log-feed"></div>
       </section>
-
     </div>
   </aside>
 
   <script>
     let map, carMarker, routePolyline;
+    let satLayer, osmLayer;
     let campusGeoJson = null;
     let ws = null;
     let isDrawerExpanded = false;
 
-    // 1. Initialize Leaflet OpenStreetMap
+    // Smooth Vehicle Interpolation State (60 FPS LERP)
+    let currentPos = { lat: 11.075066, lon: 76.989387, yaw: 0 };
+    let targetPos = { lat: 11.075066, lon: 76.989387, yaw: 0 };
+    let passengerCount = 0;
+
+    // 1. Initialize High-Resolution Satellite Map
     function initMap() {
       // Centered on Kumaraguru College of Technology
       map = L.map('map', {
         zoomControl: true,
         attributionControl: false
-      }).setView([11.0797, 76.9925], 17);
+      }).setView([11.0778, 76.9885], 17);
 
-      // Clean OpenStreetMap tiles
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      // High-resolution Esri World Imagery (Satellite) Layer
+      satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19
       }).addTo(map);
 
-      // Sleek Animated Buggy Car Marker
-      const carIcon = L.divIcon({
-        className: 'buggy-car-marker-container',
-        html: '<div class="buggy-car-marker" id="car-marker-body" style="width:26px; height:26px;">0</div>',
-        iconSize: [26, 26],
-        iconAnchor: [13, 13]
+      // OpenStreetMap Layer (optional toggle)
+      osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
       });
-      carMarker = L.marker([11.0797, 76.9925], { icon: carIcon }).addTo(map);
 
-      // Active Route Polyline
+      // Layer Toggle Buttons
+      document.getElementById('btn-layer-sat').onclick = () => {
+        if (!map.hasLayer(satLayer)) {
+          map.removeLayer(osmLayer);
+          map.addLayer(satLayer);
+          document.getElementById('btn-layer-sat').classList.add('active');
+          document.getElementById('btn-layer-osm').classList.remove('active');
+        }
+      };
+      document.getElementById('btn-layer-osm').onclick = () => {
+        if (!map.hasLayer(osmLayer)) {
+          map.removeLayer(satLayer);
+          map.addLayer(osmLayer);
+          document.getElementById('btn-layer-osm').classList.add('active');
+          document.getElementById('btn-layer-sat').classList.remove('active');
+        }
+      };
+
+      // Custom Vehicle Marker with Heading Arrow
+      const carIcon = L.divIcon({
+        className: 'vehicle-marker-wrapper',
+        html: `
+          <div class="vehicle-marker-wrapper" id="vehicle-wrapper">
+            <div class="vehicle-heading-arrow"></div>
+            <div class="vehicle-body" id="vehicle-body">0</div>
+          </div>
+        `,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+      });
+      carMarker = L.marker([currentPos.lat, currentPos.lon], { icon: carIcon }).addTo(map);
+
+      // High-contrast Route Polyline on Satellite
       routePolyline = L.polyline([], {
         color: '#38bdf8',
-        weight: 5,
-        opacity: 0.9,
-        dashArray: '8, 6',
-        lineCap: 'round'
+        weight: 6,
+        opacity: 0.95,
+        lineCap: 'round',
+        lineJoin: 'round'
       }).addTo(map);
+
+      // Start 60 FPS Smooth Interpolation Loop
+      requestAnimationFrame(renderSmoothMotion);
     }
 
-    // 2. Load KCT Road Network & Landmark Dropdowns
+    // 2. 60 FPS Smooth LERP Animation Loop
+    function renderSmoothMotion() {
+      // Lerp Position
+      const lerpFactor = 0.15;
+      currentPos.lat += (targetPos.lat - currentPos.lat) * lerpFactor;
+      currentPos.lon += (targetPos.lon - currentPos.lon) * lerpFactor;
+
+      // Lerp Heading (degrees)
+      let dYaw = (targetPos.yaw - currentPos.yaw + 360) % 360;
+      if (dYaw > 180) dYaw -= 360;
+      currentPos.yaw = (currentPos.yaw + dYaw * lerpFactor + 360) % 360;
+
+      // Update Marker position and rotation
+      carMarker.setLatLng([currentPos.lat, currentPos.lon]);
+      const wrapper = document.getElementById('vehicle-wrapper');
+      if (wrapper) {
+        wrapper.style.transform = `rotate(${currentPos.yaw}deg)`;
+      }
+      const body = document.getElementById('vehicle-body');
+      if (body) {
+        body.textContent = passengerCount;
+      }
+
+      requestAnimationFrame(renderSmoothMotion);
+    }
+
+    // 3. Load Real OSM Road Network and Landmarks
     async function loadCampusMap() {
       try {
         const res = await fetch('/api/map');
@@ -767,27 +862,31 @@
         pickupSel.innerHTML = '<option value="" disabled selected>Select Pickup Location</option>';
         dropSel.innerHTML = '<option value="" disabled selected>Select Drop-off Location</option>';
 
-        // Render Road Network
+        // Render Real OSM Roads with High Visibility on Satellite
         L.geoJSON(campusGeoJson, {
           style: function(f) {
             if (f.properties.type === 'road') {
-              return { color: '#334155', weight: 4.5, opacity: 0.75 };
+              return {
+                color: '#60a5fa',
+                weight: 4,
+                opacity: 0.75,
+                lineCap: 'round'
+              };
             }
           },
           pointToLayer: function(f, latlng) {
             if (f.properties.is_landmark) {
               const name = f.properties.name;
 
-              // Populate select dropdowns
               pickupSel.add(new Option(name, name));
               dropSel.add(new Option(name, name));
 
-              // Landmark pin on map
+              // Real Landmark Pin
               const marker = L.circleMarker(latlng, {
                 radius: 7,
-                fillColor: '#1e293b',
+                fillColor: '#0f172a',
                 color: '#38bdf8',
-                weight: 2,
+                weight: 2.5,
                 fillOpacity: 1
               }).bindTooltip(name, {
                 permanent: false,
@@ -796,8 +895,7 @@
               });
 
               marker.on('click', () => {
-                const curP = pickupSel.value;
-                if (!curP) {
+                if (!pickupSel.value) {
                   pickupSel.value = name;
                 } else {
                   dropSel.value = name;
@@ -806,15 +904,6 @@
               });
 
               return marker;
-            } else {
-              // Road intersection dot
-              return L.circleMarker(latlng, {
-                radius: 3,
-                fillColor: '#475569',
-                color: '#1e293b',
-                weight: 1,
-                fillOpacity: 0.8
-              });
             }
           }
         }).addTo(map);
@@ -824,7 +913,7 @@
       }
     }
 
-    // 3. Tab Switching & Drawer Interaction
+    // 4. Tab Switching & Drawer Interaction
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -856,7 +945,7 @@
       dragHandle.addEventListener('click', toggleDrawer);
     }
 
-    // Quick Chip clicks
+    // Quick Landmark Chip clicks
     document.querySelectorAll('.chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const dest = chip.getAttribute('data-dest');
@@ -870,7 +959,7 @@
       });
     });
 
-    // 4. WebSocket Telemetry Stream
+    // 5. WebSocket Telemetry Stream
     function connectWebSocket() {
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${proto}//${window.location.host}/ws`;
@@ -897,12 +986,27 @@
       };
     }
 
-    // 5. Reactive UI Updates
+    // 6. Reactive UI Updates
     function updateUI(t) {
       if (!t.car) return;
 
       const car = t.car;
       const bat = Math.round(car.battery);
+      passengerCount = car.onboard_count || 0;
+
+      // Target Coordinates for Smooth LERP Animation
+      if (car.lat && car.lon) {
+        // Calculate heading delta from previous target
+        const dLat = car.lat - targetPos.lat;
+        const dLon = car.lon - targetPos.lon;
+        if (Math.hypot(dLat, dLon) > 0.000005) {
+          // Compute heading angle in degrees (North = 0, East = 90)
+          const angleRad = Math.atan2(dLon, dLat);
+          targetPos.yaw = (angleRad * 180 / Math.PI + 360) % 360;
+        }
+        targetPos.lat = car.lat;
+        targetPos.lon = car.lon;
+      }
 
       // Header & Peek Info
       document.getElementById('peek-loc').textContent = car.node_name || 'KCT Campus';
@@ -932,20 +1036,13 @@
         }
       });
 
-      // Move Car Marker on Map
-      if (car.lat && car.lon) {
-        carMarker.setLatLng([car.lat, car.lon]);
-        const carIcon = document.getElementById('car-marker-body');
-        if (carIcon) carIcon.textContent = car.onboard_count;
-      }
-
       // Update Planned Route Polyline
       if (t.decision && t.decision.path_nodes && campusGeoJson) {
         const polyCoords = [];
         t.decision.path_nodes.forEach(nid => {
-          const feature = campusGeoJson.features.find(f => f.properties.id === nid && f.geometry.type === 'Point');
-          if (feature) {
-            polyCoords.push([feature.geometry.coordinates[1], feature.geometry.coordinates[0]]);
+          const node = campusGeoJson.features.find(f => f.properties.id === nid && f.geometry.type === 'Point');
+          if (node) {
+            polyCoords.push([node.geometry.coordinates[1], node.geometry.coordinates[0]]);
           }
         });
         routePolyline.setLatLngs(polyCoords);
@@ -1011,7 +1108,7 @@
       return f ? f.properties.name : id;
     }
 
-    // 6. Action Handlers
+    // 7. Action Handlers
     document.getElementById('btn-submit-booking').onclick = async () => {
       const p = document.getElementById('sel-pickup').value;
       const d = document.getElementById('sel-drop').value;
@@ -1031,7 +1128,6 @@
         });
         const data = await res.json();
         if (data.status === 'submitted') {
-          // Switch to vehicle tab
           document.querySelector('[data-tab="tab-car"]').click();
         }
       } catch (err) {

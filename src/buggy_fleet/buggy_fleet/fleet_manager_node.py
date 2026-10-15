@@ -14,7 +14,7 @@ from sensor_msgs.msg import BatteryState, NavSatFix
 from std_msgs.msg import Empty, Int32, String
 
 from .campus_planner import CampusPlanner
-from .kct_map import KctMap, pixel_to_gps, pixel_to_meters
+from .kct_map import KctMap, gps_to_meters, meters_to_gps
 
 RIDER_COLORS = ["#e67e22", "#8e44ad", "#16a085", "#c0392b", "#2980b9", "#d35400"]
 RIDER_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -30,8 +30,8 @@ class FleetManagerNode(rclpy.node.Node):
         self.planner = CampusPlanner(self.map)
 
         # Vehicle internal state
-        # Start at M Gate (node 8) by default
-        self.default_start_node = self.map.name_to_id.get("M Gate", 8)
+        # Start at South Gate (M Gate) or first landmark
+        self.default_start_node = self.map.name_to_id.get("South Gate (M Gate)", next(iter(self.map.name_to_id.values())))
         self.current_node = self.default_start_node
         self.battery_pct = 80.0
         self.is_moving = False
@@ -207,7 +207,7 @@ class FleetManagerNode(rclpy.node.Node):
         self.pub_plan.publish(msg)
 
     def publish_ros_plan(self, path_node_ids: List[int]):
-        """Publish standard nav_msgs/msg/Path across the ordered node waypoints."""
+        """Publish standard nav_msgs/msg/Path across fine-grained smooth interpolated waypoints."""
         if not path_node_ids:
             return
 
@@ -215,10 +215,9 @@ class FleetManagerNode(rclpy.node.Node):
         path_msg.header.stamp = self.get_clock().now().to_msg()
         path_msg.header.frame_id = "map"
 
-        for idx in path_node_ids:
-            node = self.map.nodes[idx]
-            xm, ym = node["x_m"], node["y_m"]
+        fine_points = self.map.interpolate_path(path_node_ids, step_meters=1.5)
 
+        for xm, ym, lat, lon in fine_points:
             pose = PoseStamped()
             pose.header = path_msg.header
             pose.pose.position.x = float(xm)
@@ -229,7 +228,6 @@ class FleetManagerNode(rclpy.node.Node):
 
         self.pub_plan.publish(path_msg)
 
-        # Publish the final or next waypoint as /goal_pose
         if path_msg.poses:
             self.pub_goal.publish(path_msg.poses[-1])
 
@@ -241,8 +239,8 @@ class FleetManagerNode(rclpy.node.Node):
             "car": {
                 "node_id": self.current_node,
                 "node_name": cur_node_data["name"],
-                "px": cur_node_data["px"],
-                "py": cur_node_data["py"],
+                "x_m": cur_node_data["x_m"],
+                "y_m": cur_node_data["y_m"],
                 "lat": cur_node_data["lat"],
                 "lon": cur_node_data["lon"],
                 "battery": round(self.battery_pct, 1),
