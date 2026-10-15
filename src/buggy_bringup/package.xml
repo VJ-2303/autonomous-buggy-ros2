@@ -11,6 +11,7 @@
 
   <exec_depend>buggy_sensors</exec_depend>
   <exec_depend>buggy_planning</exec_depend>
+  <exec_depend>buggy_fleet</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
 
