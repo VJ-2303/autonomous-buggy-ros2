@@ -2,377 +2,816 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>KCT Autonomous Buggy — Live Campus Fleet Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <title>KCT Autonomous Buggy — Campus Transit</title>
   
-  <!-- Leaflet CSS & JS for OpenStreetMap -->
+  <!-- Leaflet CSS & JS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
   <style>
     :root {
-      --bg: #f5f7fa;
-      --card: #ffffff;
-      --text: #1a202c;
-      --muted: #718096;
-      --border: #e2e8f0;
-      --primary: #2b6cb0;
-      --primary-hover: #2c5282;
-      --success: #38a169;
-      --warning: #dd6b20;
-      --danger: #e53e3e;
-      --road: #4a5568;
+      --bg: #0b0f19;
+      --surface: #131b2e;
+      --surface-elevated: #1b2640;
+      --border: #24324f;
+      --border-subtle: #1c273e;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-light: rgba(37, 99, 235, 0.15);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --car-yellow: #f59e0b;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #0f172a;
-        --card: #1e293b;
-        --text: #f1f5f9;
-        --muted: #94a3b8;
-        --border: #334155;
-        --primary: #3b82f6;
-        --primary-hover: #60a5fa;
-        --success: #10b981;
-        --warning: #f59e0b;
-        --danger: #ef4444;
-        --road: #64748b;
-      }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
-      line-height: 1.5;
-      padding: 14px;
-      max-width: 1440px;
-      margin: 0 auto;
+      overflow: hidden;
+      height: 100vh;
+      height: 100dvh;
+      width: 100vw;
     }
-    header {
+
+    /* Full-screen immersive map */
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      background: #0f172a;
+    }
+
+    /* Move Leaflet controls to top-right to avoid drawer collision */
+    .leaflet-top.leaflet-left {
+      left: auto;
+      right: 14px;
+      top: calc(76px + var(--safe-top));
+    }
+    .leaflet-bar {
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius-sm) !important;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+    }
+    .leaflet-bar a {
+      background: var(--surface) !important;
+      color: var(--text) !important;
+      border-bottom: 1px solid var(--border) !important;
+    }
+
+    /* Floating Top App Header */
+    .top-nav {
+      position: absolute;
+      top: calc(12px + var(--safe-top));
+      left: 14px;
+      right: 14px;
+      z-index: 1000;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 14px;
-      flex-wrap: wrap;
+      padding: 8px 14px;
+      background: rgba(19, 27, 46, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
       gap: 10px;
     }
-    h1 { font-size: 1.35rem; font-weight: 700; color: var(--primary); }
-    .badge {
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .brand-text h1 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.15;
+    }
+    .brand-text p {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      line-height: 1;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pill-chip {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 4px 10px;
+      padding: 5px 11px;
       border-radius: 9999px;
       font-size: 0.75rem;
       font-weight: 600;
-      background: var(--card);
+      background: var(--surface-elevated);
       border: 1px solid var(--border);
     }
-    .status-dot {
-      width: 8px;
-      height: 8px;
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
       background: var(--success);
-      box-shadow: 0 0 8px var(--success);
+      box-shadow: 0 0 6px var(--success);
+      animation: pulse-glow 2s infinite;
     }
-    .layout-grid {
-      display: grid;
-      grid-template-columns: 1fr 380px;
-      gap: 14px;
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
     }
-    @media (max-width: 960px) {
-      .layout-grid { grid-template-columns: 1fr; }
-    }
-    .card {
-      background: var(--card);
+
+    .btn-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--surface-elevated);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
     }
-    #map {
-      width: 100%;
-      height: 600px;
-      border-radius: 10px;
-      z-index: 1;
+    .btn-icon:hover {
+      color: var(--text);
+      border-color: var(--text-muted);
     }
-    .control-panel {
+
+    /* Unified Sheet / Sidebar */
+    .drawer-panel {
+      position: absolute;
+      z-index: 1001;
+      background: rgba(19, 27, 46, 0.94);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .metric-row {
+
+    /* Desktop View: Left floating side panel */
+    @media (min-width: 901px) {
+      .drawer-panel {
+        top: calc(76px + var(--safe-top));
+        left: 18px;
+        bottom: 20px;
+        width: 410px;
+        border-radius: var(--radius-lg);
+      }
+      .drag-handle { display: none; }
+    }
+
+    /* Mobile View: Slide-up Bottom Sheet */
+    @media (max-width: 900px) {
+      .drawer-panel {
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        max-height: 84vh;
+        border-radius: 20px 20px 0 0;
+        border-bottom: none;
+        padding-bottom: var(--safe-bottom);
+        transform: translateY(calc(100% - 150px)); /* Peek mode */
+      }
+      .drawer-panel.expanded {
+        transform: translateY(0);
+      }
+      .drag-handle {
+        width: 100%;
+        padding: 10px 0 6px;
+        display: flex;
+        justify-content: center;
+        cursor: grab;
+      }
+      .drag-bar {
+        width: 44px;
+        height: 5px;
+        border-radius: 9999px;
+        background: var(--text-dim);
+      }
+    }
+
+    /* Drawer Header & Tabs */
+    .drawer-header {
+      padding: 12px 16px 8px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .tabs {
+      display: flex;
+      gap: 6px;
+      background: var(--surface-elevated);
+      padding: 3px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 6px 10px;
+      border-radius: 7px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* Drawer Scrollable Content */
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* Compact Peek Status Bar (visible on mobile in collapsed state) */
+    .peek-status {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .peek-info h2 {
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+    .peek-info span {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Form & Booking Card */
+    .booking-box {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .route-inputs {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+    }
+    .input-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+    }
+    .dot-pickup { width: 9px; height: 9px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+    .dot-drop { width: 9px; height: 9px; border-radius: 2px; background: var(--danger); flex-shrink: 0; }
+    .input-row select {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 0.85rem;
+      font-weight: 500;
+      outline: none;
+      cursor: pointer;
+    }
+    .input-row select option {
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    /* Quick Chips */
+    .chips-row {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .chips-row::-webkit-scrollbar { display: none; }
+    .chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 4px 9px;
+      border-radius: 9999px;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .chip:hover {
+      color: var(--text);
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    .btn-main {
+      width: 100%;
+      padding: 11px;
+      border-radius: var(--radius-md);
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.88rem;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+    .btn-main:hover { background: var(--accent-hover); }
+
+    /* Telemetry Metric Cards */
+    .stats-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 8px;
+    }
+    .stat-card {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       text-align: center;
     }
-    .metric-box {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      padding: 8px;
-      border-radius: 8px;
+    .stat-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
-    .metric-val { font-size: 1.25rem; font-weight: 700; color: var(--text); }
-    .metric-lbl { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
-    .battery-bar-container {
+    .stat-value {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--text);
+      margin-top: 2px;
+    }
+
+    /* Seats Visual Dots */
+    .seats-visual {
+      display: flex;
+      gap: 5px;
+      margin-top: 4px;
+    }
+    .seat-dot {
+      width: 8px;
       height: 8px;
+      border-radius: 50%;
       background: var(--border);
-      border-radius: 4px;
-      overflow: hidden;
-      margin-top: 6px;
     }
-    .battery-bar {
+    .seat-dot.occupied {
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+    }
+
+    /* Battery progress bar */
+    .battery-track {
+      width: 100%;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 5px;
+    }
+    .battery-fill {
       height: 100%;
       width: 80%;
       background: var(--success);
-      transition: width 0.3s ease, background-color 0.3s ease;
+      transition: width 0.4s ease, background 0.4s ease;
     }
-    .form-group {
+
+    /* Riders & Stop Order Queue */
+    .section-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .riders-list {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 6px;
     }
-    label { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
-    select, button, input {
-      font: inherit;
-      padding: 8px 12px;
-      border-radius: 8px;
+    .rider-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface-elevated);
       border: 1px solid var(--border);
-      background: var(--bg);
-      color: var(--text);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
     }
-    button.primary {
-      background: var(--primary);
+    .rider-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .rider-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
       color: #fff;
-      font-weight: 600;
-      border: none;
-      cursor: pointer;
-      transition: background 0.2s;
     }
-    button.primary:hover { background: var(--primary-hover); }
-    button.secondary {
-      background: transparent;
+    .rider-trip {
+      font-size: 0.78rem;
+      font-weight: 500;
+    }
+    .status-tag {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+    }
+    .tag-wait { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+    .tag-on { background: var(--accent-light); color: var(--accent); }
+    .tag-done { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+    .tag-rejected { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+    /* Stop Stepper */
+    .stop-stepper {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 6px 2px;
+      scrollbar-width: none;
+    }
+    .stop-stepper::-webkit-scrollbar { display: none; }
+    .stop-step {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--surface-elevated);
       border: 1px solid var(--border);
-      color: var(--muted);
-      cursor: pointer;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.72rem;
+      white-space: nowrap;
+      font-weight: 600;
     }
-    button.secondary:hover { color: var(--text); border-color: var(--text); }
-    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-    th, td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
-    th { color: var(--muted); font-weight: 600; }
-    .status-wait { color: var(--warning); font-weight: 600; }
-    .status-on { color: var(--primary); font-weight: 600; }
-    .status-done { color: var(--success); font-weight: 600; }
-    .status-rejected { color: var(--danger); font-weight: 600; }
-    .log-box {
-      font-family: monospace;
-      font-size: 0.75rem;
-      max-height: 160px;
-      overflow-y: auto;
+
+    /* Diagnostics Log */
+    .log-container {
       background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px;
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      max-height: 180px;
+      overflow-y: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.72rem;
       display: flex;
       flex-direction: column-reverse;
+      gap: 4px;
     }
-    .log-line { padding: 2px 0; border-bottom: 1px dashed var(--border); }
-    .car-marker-icon {
-      background: #f1c40f;
+    .log-entry {
+      color: var(--text-muted);
+      border-bottom: 1px dashed var(--border-subtle);
+      padding-bottom: 2px;
+      line-height: 1.35;
+    }
+
+    /* Custom Map Markers */
+    .buggy-car-marker {
+      background: var(--car-yellow);
       border: 2px solid #000;
       border-radius: 50%;
-      text-align: center;
-      line-height: 24px;
-      font-weight: 800;
-      font-size: 12px;
+      box-shadow: 0 0 14px rgba(245, 158, 11, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
       color: #000;
-      box-shadow: 0 0 12px rgba(241, 196, 15, 0.8);
+      font-weight: 900;
+      font-size: 12px;
+    }
+    .kct-pin-marker {
+      background: var(--surface);
+      border: 2px solid var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     }
   </style>
 </head>
 <body>
 
-  <header>
-    <div>
-      <h1>KCT Autonomous Buggy</h1>
-      <span style="font-size: 0.85rem; color: var(--muted);">Live Campus Multi-Rider Navigation & Booking</span>
-    </div>
-    <div style="display: flex; gap: 8px; align-items: center;">
-      <div class="badge">
-        <span class="status-dot" id="net-dot"></span>
-        <span id="net-status">ROS 2 Connected</span>
+  <!-- Full-Screen Map Container -->
+  <div id="map"></div>
+
+  <!-- Floating Header -->
+  <header class="top-nav">
+    <div class="brand">
+      <div class="brand-icon">⚡</div>
+      <div class="brand-text">
+        <h1>KCT Buggy</h1>
+        <p>Autonomous Campus Transit</p>
       </div>
-      <button class="secondary" id="btn-reset" title="Reset Car to Starting Gate">Reset Car</button>
+    </div>
+    <div class="top-actions">
+      <div class="pill-chip">
+        <span class="pulse-dot" id="ws-indicator"></span>
+        <span id="ws-label">Online</span>
+      </div>
+      <button class="btn-icon" id="btn-reset" title="Reset Car to M Gate">↺</button>
     </div>
   </header>
 
-  <div class="layout-grid">
-    <!-- Left Column: Map -->
-    <div class="card" style="padding: 10px;">
-      <div id="map"></div>
-      <p style="font-size: 0.75rem; color: var(--muted); margin-top: 6px;">
-        Interactive OpenStreetMap of Kumaraguru College of Technology (KCT). Click any landmark on the map to set pickup & drop-off.
-      </p>
+  <!-- Mobile-First Adaptive Bottom Sheet / Desktop Sidebar -->
+  <aside class="drawer-panel" id="drawer">
+    <!-- Drag handle for mobile gesture / tap -->
+    <div class="drag-handle" id="drag-handle">
+      <div class="drag-bar"></div>
     </div>
 
-    <!-- Right Column: Control & Live Feeds -->
-    <div class="control-panel">
-      
-      <!-- Telemetry Dashboard Card -->
-      <div class="card">
-        <div class="metric-row">
-          <div class="metric-val">
-            <span id="car-seat-count">0</span><span style="font-size: 0.8rem; color: var(--muted);">/4</span>
-            <div class="metric-lbl">Seats</div>
+    <!-- Drawer Header & Navigation Tabs -->
+    <div class="drawer-header">
+      <div class="peek-status">
+        <div class="peek-info">
+          <h2 id="peek-loc">M Gate</h2>
+          <span id="peek-status-desc">Car Idle • 4 Seats Available</span>
+        </div>
+        <div style="text-align: right;">
+          <strong id="peek-bat" style="font-size: 1.1rem; color: var(--success);">80%</strong>
+          <div style="font-size: 0.68rem; color: var(--text-dim);">BATTERY</div>
+        </div>
+      </div>
+      <div class="tabs" style="margin-top: 10px;">
+        <button class="tab-btn active" data-tab="tab-book">Book</button>
+        <button class="tab-btn" data-tab="tab-car">Vehicle</button>
+        <button class="tab-btn" data-tab="tab-logs">Logs</button>
+      </div>
+    </div>
+
+    <!-- Drawer Body -->
+    <div class="drawer-body">
+
+      <!-- TAB 1: RIDE BOOKING -->
+      <section id="tab-book" class="tab-content" style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="booking-box">
+          <div class="route-inputs">
+            <div class="input-row">
+              <span class="dot-pickup"></span>
+              <select id="sel-pickup" aria-label="Pickup location">
+                <option value="" disabled selected>Select Pickup Location</option>
+              </select>
+            </div>
+            <div class="input-row">
+              <span class="dot-drop"></span>
+              <select id="sel-drop" aria-label="Drop-off location">
+                <option value="" disabled selected>Select Drop-off Location</option>
+              </select>
+            </div>
           </div>
-          <div class="metric-val">
-            <span id="car-battery">80</span><span style="font-size: 0.8rem; color: var(--muted);">%</span>
-            <div class="metric-lbl">Battery</div>
+
+          <!-- Quick Campus Destination Chips -->
+          <div>
+            <span style="font-size: 0.68rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Popular Stops</span>
+            <div class="chips-row" style="margin-top: 5px;">
+              <span class="chip" data-dest="Main Gate">Main Gate</span>
+              <span class="chip" data-dest="Admin Block">Admin Block</span>
+              <span class="chip" data-dest="Kore">Kore</span>
+              <span class="chip" data-dest="The Orb">The Orb</span>
+              <span class="chip" data-dest="G Hostel">G Hostel</span>
+              <span class="chip" data-dest="Auditorium">Auditorium</span>
+              <span class="chip" data-dest="Back Gate">Back Gate</span>
+            </div>
           </div>
-          <div class="metric-val">
-            <span id="car-odo">0</span><span style="font-size: 0.8rem; color: var(--muted);">m</span>
-            <div class="metric-lbl">Distance</div>
+
+          <button class="btn-main" id="btn-submit-booking">
+            <span>Book Campus Ride</span>
+          </button>
+        </div>
+
+        <!-- Real-time Multi-Rider Active Pool -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div class="section-title">
+            <span>Active Passengers</span>
+            <span id="seat-badge" style="font-size: 0.72rem; color: var(--text-muted);">0/4 Seats</span>
+          </div>
+          <div class="riders-list" id="riders-list-container">
+            <div style="font-size: 0.75rem; color: var(--text-dim); text-align: center; padding: 10px;">
+              No passengers waiting or onboard.
+            </div>
           </div>
         </div>
-        <div class="battery-bar-container">
-          <div class="battery-bar" id="battery-bar"></div>
-        </div>
-        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-top: 8px; color: var(--muted);">
-          <span>Current Location: <strong id="car-location" style="color: var(--text);">M Gate</strong></span>
-          <span>Status: <strong id="car-status-text" style="color: var(--primary);">Idle</strong></span>
-        </div>
-      </div>
+      </section>
 
-      <!-- Ride Booking Form Card -->
-      <div class="card">
-        <h2 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 8px;">Book a Campus Ride</h2>
-        <div class="form-group" style="margin-bottom: 8px;">
-          <label>Pickup Location</label>
-          <select id="sel-pickup"></select>
+      <!-- TAB 2: VEHICLE & NAV2 TELEMETRY -->
+      <section id="tab-car" class="tab-content" style="display: none; flex-direction: column; gap: 12px;">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-label">Battery</span>
+            <span class="stat-value" id="card-battery">80%</span>
+            <div class="battery-track"><div class="battery-fill" id="card-battery-fill"></div></div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Seats</span>
+            <span class="stat-value" id="card-seats">0/4</span>
+            <div class="seats-visual" id="seats-visual">
+              <span class="seat-dot"></span><span class="seat-dot"></span><span class="seat-dot"></span><span class="seat-dot"></span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Odometer</span>
+            <span class="stat-value" id="card-odo">0m</span>
+            <span style="font-size: 0.65rem; color: var(--text-dim); margin-top: 4px;">5.0 m/s cruise</span>
+          </div>
         </div>
-        <div class="form-group" style="margin-bottom: 12px;">
-          <label>Drop-off Location</label>
-          <select id="sel-drop"></select>
-        </div>
-        <button class="primary" id="btn-book" style="width: 100%;">Book Ride</button>
-      </div>
 
-      <!-- Passengers & Orders Card -->
-      <div class="card">
-        <h2 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 6px;">Active Riders</h2>
-        <table>
-          <thead>
-            <tr><th>Rider</th><th>Trip</th><th>Status</th></tr>
-          </thead>
-          <tbody id="riders-table">
-            <tr><td colspan="3" style="color: var(--muted); text-align: center;">No active riders</td></tr>
-          </tbody>
-        </table>
-        <div style="margin-top: 8px; font-size: 0.75rem; color: var(--muted);">
-          Active Stop Queue: <strong id="stop-queue" style="color: var(--text);">None</strong>
+        <!-- Active Stop Sequence -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <span class="section-title">Active Stop Order</span>
+          <div class="stop-stepper" id="stop-stepper">
+            <span style="font-size: 0.75rem; color: var(--text-dim);">No scheduled stops</span>
+          </div>
         </div>
-      </div>
 
-      <!-- Decision Diagnostics Card -->
-      <div class="card">
-        <h2 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 6px;">Algorithm Planning Decision</h2>
-        <div id="decision-details" style="font-size: 0.75rem; color: var(--muted);">
-          Awaiting ride requests.
+        <!-- Algorithm Diagnostics -->
+        <div class="booking-box" style="font-size: 0.75rem;">
+          <div class="section-title" style="margin-bottom: 6px;">Planner Constraints</div>
+          <div id="decision-text" style="color: var(--text-muted); line-height: 1.45;">
+            Dijkstra & A* ready. 1.5x detour limit, 20% battery reserve active.
+          </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Event Logs -->
-      <div class="card">
-        <h2 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 6px;">Event Logs</h2>
-        <div class="log-box" id="event-logs"></div>
-      </div>
+      <!-- TAB 3: DISPATCH LOGS -->
+      <section id="tab-logs" class="tab-content" style="display: none; flex-direction: column; gap: 10px;">
+        <div class="section-title">Live Dispatch Feed</div>
+        <div class="log-container" id="log-feed"></div>
+      </section>
 
     </div>
-  </div>
+  </aside>
 
   <script>
-    let map, carMarker, routePolyline, landmarkMarkers = {};
+    let map, carMarker, routePolyline;
     let campusGeoJson = null;
-    let selectedPickup = null;
     let ws = null;
+    let isDrawerExpanded = false;
 
-    // 1. Initialize Leaflet Map centered on KCT Campus
+    // 1. Initialize Leaflet OpenStreetMap
     function initMap() {
-      // KCT Coimbatore Campus center coordinates
-      map = L.map('map').setView([11.0797, 76.9925], 17);
+      // Centered on Kumaraguru College of Technology
+      map = L.map('map', {
+        zoomControl: true,
+        attributionControl: false
+      }).setView([11.0797, 76.9925], 17);
 
-      // OpenStreetMap Standard Tiles
+      // Clean OpenStreetMap tiles
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors | KCT Autonomous Buggy'
+        maxZoom: 19
       }).addTo(map);
 
-      // Car Marker with Custom HTML
+      // Sleek Animated Buggy Car Marker
       const carIcon = L.divIcon({
-        className: 'car-marker-container',
-        html: '<div class="car-marker-icon" id="car-icon">0</div>',
+        className: 'buggy-car-marker-container',
+        html: '<div class="buggy-car-marker" id="car-marker-body" style="width:26px; height:26px;">0</div>',
         iconSize: [26, 26],
         iconAnchor: [13, 13]
       });
       carMarker = L.marker([11.0797, 76.9925], { icon: carIcon }).addTo(map);
 
-      // Route Polyline
+      // Active Route Polyline
       routePolyline = L.polyline([], {
-        color: '#2b6cb0',
+        color: '#38bdf8',
         weight: 5,
+        opacity: 0.9,
         dashArray: '8, 6',
-        opacity: 0.85
+        lineCap: 'round'
       }).addTo(map);
     }
 
-    // 2. Load KCT Road Network and Landmarks
+    // 2. Load KCT Road Network & Landmark Dropdowns
     async function loadCampusMap() {
       try {
         const res = await fetch('/api/map');
         campusGeoJson = await res.json();
 
-        const pickupSelect = document.getElementById('sel-pickup');
-        const dropSelect = document.getElementById('sel-drop');
-        pickupSelect.innerHTML = '';
-        dropSelect.innerHTML = '';
+        const pickupSel = document.getElementById('sel-pickup');
+        const dropSel = document.getElementById('sel-drop');
+        pickupSel.innerHTML = '<option value="" disabled selected>Select Pickup Location</option>';
+        dropSel.innerHTML = '<option value="" disabled selected>Select Drop-off Location</option>';
 
-        // Draw road network
+        // Render Road Network
         L.geoJSON(campusGeoJson, {
-          style: function(feature) {
-            if (feature.properties.type === 'road') {
-              return { color: '#64748b', weight: 4, opacity: 0.7 };
+          style: function(f) {
+            if (f.properties.type === 'road') {
+              return { color: '#334155', weight: 4.5, opacity: 0.75 };
             }
           },
-          pointToLayer: function(feature, latlng) {
-            if (feature.properties.is_landmark) {
-              const name = feature.properties.name;
-              
-              // Add to dropdowns
-              const optP = new Option(name, name);
-              const optD = new Option(name, name);
-              pickupSelect.add(optP);
-              dropSelect.add(optD);
+          pointToLayer: function(f, latlng) {
+            if (f.properties.is_landmark) {
+              const name = f.properties.name;
 
-              // Landmark map marker
+              // Populate select dropdowns
+              pickupSel.add(new Option(name, name));
+              dropSel.add(new Option(name, name));
+
+              // Landmark pin on map
               const marker = L.circleMarker(latlng, {
                 radius: 7,
-                fillColor: '#ffffff',
-                color: '#2b6cb0',
+                fillColor: '#1e293b',
+                color: '#38bdf8',
                 weight: 2,
-                opacity: 1,
                 fillOpacity: 1
-              }).bindTooltip(name, { permanent: false, direction: 'top' });
+              }).bindTooltip(name, {
+                permanent: false,
+                direction: 'top',
+                className: 'leaflet-custom-tooltip'
+              });
 
-              marker.on('click', () => handleLandmarkClick(name));
-              landmarkMarkers[name] = marker;
+              marker.on('click', () => {
+                const curP = pickupSel.value;
+                if (!curP) {
+                  pickupSel.value = name;
+                } else {
+                  dropSel.value = name;
+                }
+                expandDrawer();
+              });
+
               return marker;
             } else {
-              // Junction marker (small dot)
+              // Road intersection dot
               return L.circleMarker(latlng, {
                 radius: 3,
-                fillColor: '#94a3b8',
-                color: '#64748b',
+                fillColor: '#475569',
+                color: '#1e293b',
                 weight: 1,
                 fillOpacity: 0.8
               });
@@ -380,26 +819,56 @@
           }
         }).addTo(map);
 
-        if (dropSelect.options.length > 1) {
-          dropSelect.selectedIndex = 1;
-        }
-
       } catch (err) {
         console.error('Failed to load campus map:', err);
       }
     }
 
-    // 3. Interactive Landmark Selection via Map Click
-    function handleLandmarkClick(name) {
-      if (!selectedPickup) {
-        selectedPickup = name;
-        document.getElementById('sel-pickup').value = name;
-        alert(`Pickup set to: ${name}. Now select drop-off location.`);
+    // 3. Tab Switching & Drawer Interaction
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+        btn.classList.add('active');
+        const tabId = btn.getAttribute('data-tab');
+        document.getElementById(tabId).style.display = 'flex';
+        expandDrawer();
+      });
+    });
+
+    const drawer = document.getElementById('drawer');
+    const dragHandle = document.getElementById('drag-handle');
+
+    function toggleDrawer() {
+      isDrawerExpanded = !isDrawerExpanded;
+      if (isDrawerExpanded) {
+        drawer.classList.add('expanded');
       } else {
-        document.getElementById('sel-drop').value = name;
-        selectedPickup = null;
+        drawer.classList.remove('expanded');
       }
     }
+    function expandDrawer() {
+      isDrawerExpanded = true;
+      drawer.classList.add('expanded');
+    }
+
+    if (dragHandle) {
+      dragHandle.addEventListener('click', toggleDrawer);
+    }
+
+    // Quick Chip clicks
+    document.querySelectorAll('.chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const dest = chip.getAttribute('data-dest');
+        const pickupSel = document.getElementById('sel-pickup');
+        const dropSel = document.getElementById('sel-drop');
+        if (!pickupSel.value) {
+          pickupSel.value = dest;
+        } else {
+          dropSel.value = dest;
+        }
+      });
+    });
 
     // 4. WebSocket Telemetry Stream
     function connectWebSocket() {
@@ -408,120 +877,163 @@
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        document.getElementById('net-dot').style.background = 'var(--success)';
-        document.getElementById('net-status').textContent = 'ROS 2 Live';
+        document.getElementById('ws-indicator').style.background = 'var(--success)';
+        document.getElementById('ws-label').textContent = 'Online';
       };
 
       ws.onclose = () => {
-        document.getElementById('net-dot').style.background = 'var(--danger)';
-        document.getElementById('net-status').textContent = 'Reconnecting...';
+        document.getElementById('ws-indicator').style.background = 'var(--danger)';
+        document.getElementById('ws-label').textContent = 'Offline';
         setTimeout(connectWebSocket, 1500);
       };
 
-      ws.onmessage = (event) => {
+      ws.onmessage = (e) => {
         try {
-          const telemetry = JSON.parse(event.data);
+          const telemetry = JSON.parse(e.data);
           updateUI(telemetry);
-        } catch (e) {
-          console.error('Error parsing telemetry:', e);
+        } catch (err) {
+          console.error('Error parsing telemetry:', err);
         }
       };
     }
 
-    // 5. Update UI Dashboard
+    // 5. Reactive UI Updates
     function updateUI(t) {
       if (!t.car) return;
 
-      // Telemetry metrics
-      document.getElementById('car-seat-count').textContent = t.car.onboard_count;
-      document.getElementById('car-battery').textContent = t.car.battery;
-      document.getElementById('car-odo').textContent = Math.round(t.car.odometer_m);
-      document.getElementById('car-location').textContent = t.car.node_name;
-      document.getElementById('car-status-text').textContent = t.car.is_moving ? 'Driving' : 'Idle';
+      const car = t.car;
+      const bat = Math.round(car.battery);
 
-      // Battery bar
-      const bbar = document.getElementById('battery-bar');
-      bbar.style.width = `${Math.min(100, Math.max(0, t.car.battery))}%`;
-      bbar.style.background = t.car.battery <= 20 ? 'var(--danger)' : 'var(--success)';
+      // Header & Peek Info
+      document.getElementById('peek-loc').textContent = car.node_name || 'KCT Campus';
+      document.getElementById('peek-status-desc').textContent = car.is_moving
+        ? `Driving • ${car.onboard_count}/4 Seats Occupied`
+        : `Idle • ${4 - car.onboard_count} Seats Available`;
+      document.getElementById('peek-bat').textContent = `${bat}%`;
+      document.getElementById('peek-bat').style.color = bat <= 20 ? 'var(--danger)' : 'var(--success)';
 
-      // Car position on Map
-      if (t.car.lat && t.car.lon) {
-        carMarker.setLatLng([t.car.lat, t.car.lon]);
-        const carIconEl = document.getElementById('car-icon');
-        if (carIconEl) carIconEl.textContent = t.car.onboard_count;
+      // Tab 2 Cards
+      document.getElementById('card-battery').textContent = `${bat}%`;
+      const fill = document.getElementById('card-battery-fill');
+      fill.style.width = `${Math.min(100, Math.max(0, bat))}%`;
+      fill.style.background = bat <= 20 ? 'var(--danger)' : 'var(--success)';
+
+      document.getElementById('card-seats').textContent = `${car.onboard_count}/4`;
+      document.getElementById('card-odo').textContent = `${Math.round(car.odometer_m)}m`;
+      document.getElementById('seat-badge').textContent = `${car.onboard_count}/4 Seats`;
+
+      // Update 4 Seat Dots
+      const seatDots = document.querySelectorAll('#seats-visual .seat-dot');
+      seatDots.forEach((dot, idx) => {
+        if (idx < car.onboard_count) {
+          dot.classList.add('occupied');
+        } else {
+          dot.classList.remove('occupied');
+        }
+      });
+
+      // Move Car Marker on Map
+      if (car.lat && car.lon) {
+        carMarker.setLatLng([car.lat, car.lon]);
+        const carIcon = document.getElementById('car-marker-body');
+        if (carIcon) carIcon.textContent = car.onboard_count;
       }
 
-      // Stop queue
-      document.getElementById('stop-queue').textContent = t.queue && t.queue.length ? t.queue.join(' → ') : 'None';
-
-      // Update Path Polyline
+      // Update Planned Route Polyline
       if (t.decision && t.decision.path_nodes && campusGeoJson) {
-        const coords = [];
-        t.decision.path_nodes.forEach(nodeId => {
-          const node = campusGeoJson.features.find(f => f.properties.id === nodeId && f.geometry.type === 'Point');
-          if (node) {
-            coords.push([node.geometry.coordinates[1], node.geometry.coordinates[0]]);
+        const polyCoords = [];
+        t.decision.path_nodes.forEach(nid => {
+          const feature = campusGeoJson.features.find(f => f.properties.id === nid && f.geometry.type === 'Point');
+          if (feature) {
+            polyCoords.push([feature.geometry.coordinates[1], feature.geometry.coordinates[0]]);
           }
         });
-        routePolyline.setLatLngs(coords);
+        routePolyline.setLatLngs(polyCoords);
       } else {
         routePolyline.setLatLngs([]);
       }
 
-      // Riders Table
-      const rbody = document.getElementById('riders-table');
+      // Update Stop Stepper
+      const stepper = document.getElementById('stop-stepper');
+      if (t.queue && t.queue.length) {
+        stepper.innerHTML = t.queue.map(s => {
+          const isPickup = s.startsWith('P');
+          return `
+            <div class="stop-step">
+              <span style="color: ${isPickup ? 'var(--success)' : 'var(--danger)'};">●</span>
+              <span>${s}</span>
+            </div>
+          `;
+        }).join('');
+      } else {
+        stepper.innerHTML = '<span style="font-size: 0.75rem; color: var(--text-dim);">No scheduled stops</span>';
+      }
+
+      // Update Active Riders List
+      const ridersContainer = document.getElementById('riders-list-container');
       if (t.riders && t.riders.length) {
-        rbody.innerHTML = t.riders.map(r => `
-          <tr>
-            <td style="color: ${r.color}; font-weight: 700;">${r.id}</td>
-            <td>${getNodeName(r.pickup)} → ${getNodeName(r.drop)}</td>
-            <td class="status-${r.status}">${r.status}</td>
-          </tr>
+        ridersContainer.innerHTML = t.riders.map(r => `
+          <div class="rider-card">
+            <div class="rider-badge">
+              <div class="rider-avatar" style="background: ${r.color};">${r.id}</div>
+              <div class="rider-trip">${getNodeName(r.pickup)} → ${getNodeName(r.drop)}</div>
+            </div>
+            <span class="status-tag tag-${r.status}">${r.status}</span>
+          </div>
         `).join('');
       } else {
-        rbody.innerHTML = '<tr><td colspan="3" style="color: var(--muted); text-align: center;">No active riders</td></tr>';
+        ridersContainer.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-dim); text-align: center; padding: 10px;">No passengers waiting or onboard.</div>';
       }
 
-      // Decision Diagnostics Card
-      const decEl = document.getElementById('decision-details');
+      // Update Decision Diagnostics
+      const decText = document.getElementById('decision-text');
       if (t.decision && t.decision.ok) {
-        decEl.innerHTML = `
-          <div>Orders Evaluated: <strong>${t.decision.tried}</strong> (Valid: ${t.decision.valid})</div>
-          <div>Distance: <strong>${t.decision.distance_m} m</strong> | Est Time: <strong>${t.decision.time_s} s</strong></div>
-          <div>Battery Required: <strong>${t.decision.battery_used}%</strong> (Remaining: ${t.decision.battery_left}%)</div>
-          <div>A* vs Dijkstra Explored: <strong>${t.decision.astar_explored}</strong> vs <strong>${t.decision.dijkstra_explored}</strong> nodes</div>
+        decText.innerHTML = `
+          <strong>Optimal Route Found</strong> (${t.decision.distance_m}m • ~${t.decision.time_s}s)<br>
+          Evaluated ${t.decision.tried} permutations (${t.decision.valid} valid).<br>
+          Battery after trip: <strong>${t.decision.battery_left}%</strong> (used: ${t.decision.battery_used}%).<br>
+          A* vs Dijkstra: ${t.decision.astar_explored} vs ${t.decision.dijkstra_explored} nodes explored.
         `;
       } else if (t.decision && !t.decision.ok) {
-        decEl.innerHTML = `<span style="color: var(--danger); font-weight: 600;">Last Request Rejected: ${t.decision.message || 'Constraints violated'}</span>`;
+        decText.innerHTML = `<span style="color: var(--danger); font-weight: 700;">Request Rejected: ${t.decision.message || 'Constraints violated'}</span>`;
       }
 
-      // Event Logs
+      // Update Dispatch Logs Feed
       if (t.logs) {
-        const logBox = document.getElementById('event-logs');
-        logBox.innerHTML = t.logs.map(l => `<div class="log-line">${l}</div>`).join('');
+        const logFeed = document.getElementById('log-feed');
+        logFeed.innerHTML = t.logs.map(l => `<div class="log-entry">${l}</div>`).join('');
       }
     }
 
     function getNodeName(id) {
       if (!campusGeoJson) return id;
-      const node = campusGeoJson.features.find(f => f.properties.id === id && f.geometry.type === 'Point');
-      return node ? node.properties.name : id;
+      const f = campusGeoJson.features.find(feat => feat.properties.id === id && feat.geometry.type === 'Point');
+      return f ? f.properties.name : id;
     }
 
     // 6. Action Handlers
-    document.getElementById('btn-book').onclick = async () => {
+    document.getElementById('btn-submit-booking').onclick = async () => {
       const p = document.getElementById('sel-pickup').value;
       const d = document.getElementById('sel-drop').value;
+      if (!p || !d) {
+        alert('Please choose both pickup and drop-off locations.');
+        return;
+      }
       if (p === d) {
         alert('Pickup and drop-off must be different locations.');
         return;
       }
       try {
-        await fetch('/api/book', {
+        const res = await fetch('/api/book', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pickup: p, drop: d })
         });
+        const data = await res.json();
+        if (data.status === 'submitted') {
+          // Switch to vehicle tab
+          document.querySelector('[data-tab="tab-car"]').click();
+        }
       } catch (err) {
         alert('Error booking ride: ' + err.message);
       }
@@ -531,7 +1043,7 @@
       await fetch('/api/reset', { method: 'POST' });
     };
 
-    // Initialize on page load
+    // Initialize
     window.onload = () => {
       initMap();
       loadCampusMap();
