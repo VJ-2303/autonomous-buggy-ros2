@@ -76,12 +76,20 @@ def generate_launch_description():
         arguments=['-d', default_rviz_config],
         condition=IfCondition(LaunchConfiguration('rviz'))
     )
+    health_monitor_node = Node(
+        package='buggy_fleet',
+        executable='health_monitor_node',
+        name='health_monitor_node',
+        output='screen'
+    )
+
 
     return LaunchDescription([
         declare_rviz_arg,
         mock_gps_node,
         mock_bms_node,
         global_planner_node,
+        health_monitor_node,
         static_tf_map_odom,
         static_tf_odom_base,
         static_tf_base_gps,

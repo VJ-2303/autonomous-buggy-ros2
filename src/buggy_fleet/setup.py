@@ -26,6 +26,7 @@ setup(
             'fleet_manager_node = buggy_fleet.fleet_manager_node:main',
             'car_motion_node = buggy_fleet.car_motion_node:main',
             'web_server = buggy_fleet.web_server:main',
+            'health_monitor_node = buggy_fleet.health_monitor_node:main',
         ],
     },
 )
